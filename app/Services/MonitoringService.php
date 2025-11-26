@@ -134,14 +134,14 @@ class MonitoringService
     {
         $key = "metrics.{$metric}." . date('Y-m-d-H');
         
-        // Store hourly metrics
-        Cache::increment($key, $value);
-        Cache::expire($key, 86400 * 7); // Keep for 7 days
+        // Store hourly metrics with expiration
+        $currentValue = Cache::get($key, 0);
+        Cache::put($key, $currentValue + $value, now()->addDays(7));
 
-        // Store daily aggregates
+        // Store daily aggregates with expiration
         $dailyKey = "metrics.{$metric}." . date('Y-m-d');
-        Cache::increment($dailyKey, $value);
-        Cache::expire($dailyKey, 86400 * 30); // Keep for 30 days
+        $currentDailyValue = Cache::get($dailyKey, 0);
+        Cache::put($dailyKey, $currentDailyValue + $value, now()->addDays(30));
     }
 
     /**
