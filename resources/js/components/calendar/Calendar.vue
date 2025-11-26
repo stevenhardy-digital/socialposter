@@ -1,7 +1,5 @@
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-      <div class="px-4 py-6 sm:px-0">
+  <div>
         <div class="flex justify-between items-center mb-6">
           <h1 class="text-2xl font-bold text-gray-900">Calendar</h1>
           <div class="flex items-center space-x-4">
@@ -93,8 +91,6 @@
         <div v-if="error" class="bg-red-50 border border-red-200 rounded-md p-4 mt-4">
           <div class="text-red-800">{{ error }}</div>
         </div>
-      </div>
-    </div>
   </div>
 </template>
 

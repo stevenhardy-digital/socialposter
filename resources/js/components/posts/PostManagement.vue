@@ -1,9 +1,7 @@
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-      <div class="px-4 py-6 sm:px-0">
-        <div class="flex justify-between items-center mb-6">
-          <h1 class="text-2xl font-bold text-gray-900">Post Management</h1>
+  <div>
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-2xl font-bold text-gray-900">Post Management</h1>
           <button
             @click="showCreateModal = true"
             class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
@@ -259,8 +257,6 @@
             </form>
           </div>
         </div>
-      </div>
-    </div>
   </div>
 </template>
 

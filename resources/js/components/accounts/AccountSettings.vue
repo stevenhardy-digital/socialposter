@@ -1,8 +1,6 @@
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-      <div class="px-4 py-6 sm:px-0">
-        <h1 class="text-2xl font-bold text-gray-900 mb-6">Account Settings</h1>
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900 mb-6">Account Settings</h1>
         
         <!-- Connected Accounts Section -->
         <div class="bg-white shadow rounded-lg p-6 mb-6">
@@ -94,9 +92,6 @@
           >
             {{ message }}
           </div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 

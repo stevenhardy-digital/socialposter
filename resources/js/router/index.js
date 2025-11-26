@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/auth';
 // Import components
 import Login from '../components/auth/Login.vue';
 import Register from '../components/auth/Register.vue';
+import Layout from '../components/layout/Layout.vue';
 import Dashboard from '../components/Dashboard.vue';
 import AccountSettings from '../components/accounts/AccountSettings.vue';
 import BrandGuidelines from '../components/brand/BrandGuidelines.vue';
@@ -27,45 +28,45 @@ const routes = [
     },
     {
         path: '/',
-        name: 'Dashboard',
-        component: Dashboard,
-        meta: { requiresAuth: true }
-    },
-    {
-        path: '/accounts',
-        name: 'AccountSettings',
-        component: AccountSettings,
-        meta: { requiresAuth: true }
-    },
-    {
-        path: '/brand-guidelines',
-        name: 'BrandGuidelines',
-        component: BrandGuidelines,
-        meta: { requiresAuth: true }
-    },
-    {
-        path: '/posts',
-        name: 'PostManagement',
-        component: PostManagement,
-        meta: { requiresAuth: true }
-    },
-    {
-        path: '/calendar',
-        name: 'Calendar',
-        component: Calendar,
-        meta: { requiresAuth: true }
-    },
-    {
-        path: '/analytics',
-        name: 'Analytics',
-        component: Analytics,
-        meta: { requiresAuth: true }
-    },
-    {
-        path: '/system-status',
-        name: 'SystemStatus',
-        component: SystemStatus,
-        meta: { requiresAuth: true }
+        component: Layout,
+        meta: { requiresAuth: true },
+        children: [
+            {
+                path: '',
+                name: 'Dashboard',
+                component: Dashboard
+            },
+            {
+                path: 'accounts',
+                name: 'AccountSettings',
+                component: AccountSettings
+            },
+            {
+                path: 'brand-guidelines',
+                name: 'BrandGuidelines',
+                component: BrandGuidelines
+            },
+            {
+                path: 'posts',
+                name: 'PostManagement',
+                component: PostManagement
+            },
+            {
+                path: 'calendar',
+                name: 'Calendar',
+                component: Calendar
+            },
+            {
+                path: 'analytics',
+                name: 'Analytics',
+                component: Analytics
+            },
+            {
+                path: 'system-status',
+                name: 'SystemStatus',
+                component: SystemStatus
+            }
+        ]
     }
 ];
 

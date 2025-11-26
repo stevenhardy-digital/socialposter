@@ -1,67 +1,5 @@
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <nav class="bg-white shadow">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between h-16">
-          <div class="flex items-center">
-            <h1 class="text-xl font-semibold text-gray-900">Social Media Platform</h1>
-            <div class="ml-4 flex items-center">
-              <div class="flex items-center space-x-2">
-                <div :class="systemStatusClass" class="w-2 h-2 rounded-full"></div>
-                <span class="text-sm text-gray-600">{{ systemStatusText }}</span>
-              </div>
-            </div>
-          </div>
-          <div class="flex items-center space-x-4">
-            <router-link
-              to="/accounts"
-              class="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
-            >
-              Accounts
-            </router-link>
-            <router-link
-              to="/brand-guidelines"
-              class="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
-            >
-              Brand Guidelines
-            </router-link>
-            <router-link
-              to="/posts"
-              class="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
-            >
-              Posts
-            </router-link>
-            <router-link
-              to="/calendar"
-              class="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
-            >
-              Calendar
-            </router-link>
-            <router-link
-              to="/analytics"
-              class="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
-            >
-              Analytics
-            </router-link>
-            <router-link
-              to="/system-status"
-              class="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
-            >
-              System Status
-            </router-link>
-            <button
-              @click="handleLogout"
-              class="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </div>
-    </nav>
-
-    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-      <div class="px-4 py-6 sm:px-0">
+  <div>
         <!-- System Alerts -->
         <div v-if="dashboardData.system_alerts && dashboardData.system_alerts.length > 0" class="mb-6">
           <div class="bg-white shadow rounded-lg p-6">
@@ -287,30 +225,18 @@
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </main>
   </div>
 </template>
 
 <script>
 import { ref, onMounted, computed } from 'vue';
-import { useRouter } from 'vue-router';
-import { useAuthStore } from '../stores/auth';
 import axios from 'axios';
 
 export default {
   name: 'Dashboard',
   setup() {
-    const router = useRouter();
-    const authStore = useAuthStore();
     const dashboardData = ref({});
     const loading = ref(true);
-    
-    const handleLogout = async () => {
-      await authStore.logout();
-      router.push('/login');
-    };
 
     const loadDashboardData = async () => {
       try {
@@ -328,30 +254,6 @@ export default {
       if (!dashboardData.value.connected_accounts) return 0;
       return Object.values(dashboardData.value.connected_accounts)
         .reduce((total, accounts) => total + accounts.length, 0);
-    });
-
-    const systemStatusClass = computed(() => {
-      const status = dashboardData.value.system_status;
-      if (!status) return 'bg-gray-400';
-      
-      const hasUnhealthy = Object.values(status).some(s => s === 'unhealthy');
-      const hasWarning = Object.values(status).some(s => s === 'warning');
-      
-      if (hasUnhealthy) return 'bg-red-400';
-      if (hasWarning) return 'bg-yellow-400';
-      return 'bg-green-400';
-    });
-
-    const systemStatusText = computed(() => {
-      const status = dashboardData.value.system_status;
-      if (!status) return 'Unknown';
-      
-      const hasUnhealthy = Object.values(status).some(s => s === 'unhealthy');
-      const hasWarning = Object.values(status).some(s => s === 'warning');
-      
-      if (hasUnhealthy) return 'System Issues';
-      if (hasWarning) return 'Minor Issues';
-      return 'All Systems Operational';
     });
 
     const platformIconClass = (platform) => {
@@ -416,12 +318,9 @@ export default {
     });
     
     return {
-      handleLogout,
       dashboardData,
       loading,
       connectedAccountsCount,
-      systemStatusClass,
-      systemStatusText,
       platformIconClass,
       statusClass,
       alertClasses,
