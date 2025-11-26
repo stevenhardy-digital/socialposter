@@ -7,8 +7,15 @@
 **Solution**: Modified health check to skip Redis check when not configured as primary driver
 
 ### 2. OAuth LinkedIn Connection Error ✅ FIXED  
-**Problem**: "Session store not set on request" error during OAuth flow
-**Solution**: Added session middleware to OAuth routes and improved error handling
+**Problem**: Multiple OAuth issues:
+- "Session store not set on request" error during OAuth flow
+- LinkedIn scope `r_emailaddress` not authorized (deprecated scope)
+- Route [login] not defined error on callback failures
+
+**Solution**: 
+- Moved OAuth callbacks to web routes with proper session support
+- Updated LinkedIn scopes to use current v2 API scopes
+- Added proper error handling and frontend redirects
 
 ## Applied Fixes
 
@@ -17,11 +24,14 @@
 - Updated `getQuickSystemStatus()` to handle Redis gracefully
 - Health check now returns proper status even with database-only setup
 
-### ✅ API Routes Updates
-- Added `web` middleware to OAuth routes (`connect` and `callback`)
-- OAuth routes now have access to session storage required by Laravel Socialite
+### ✅ OAuth Flow Fixes
+- **LinkedIn Scopes**: Updated to use correct v2 scopes (`r_liteprofile`, `w_member_social`)
+- **Callback Routes**: Moved OAuth callbacks to web routes for proper session support
+- **Error Handling**: Improved OAuth error handling to redirect to frontend instead of missing login route
+- **Redirect URLs**: Updated all platforms to use `/auth/callback/{platform}` web routes
 
 ### ✅ SocialAccountController.php Updates
+- Added `webCallback()` method for handling OAuth redirects to frontend
 - Added session initialization check in `connect()` method
 - Improved error logging with session status information
 - Better error messages for debugging OAuth issues
@@ -64,10 +74,19 @@ The SystemController was trying to check Redis connection even when Redis wasn't
 ### OAuth Session Error  
 Laravel Socialite requires session middleware to store OAuth state during the authentication flow. API routes don't include session middleware by default, causing the "Session store not set on request" error.
 
-## Verification Commands
+## Immediate Actions Required
 
-Run these after deployment:
+### 1. Update LinkedIn App Configuration
+In your LinkedIn Developer Console:
+- Update redirect URI from `/api/social-accounts/callback/linkedin` to `/auth/callback/linkedin`
+- Ensure your app has the correct scopes: `r_liteprofile` and `w_member_social`
+- Remove any deprecated scopes like `r_emailaddress`
 
+### 2. Update Other Platform Redirect URIs
+- **Instagram**: Change to `/auth/callback/instagram`
+- **Facebook**: Change to `/auth/callback/facebook`
+
+### 3. Deploy and Clear Caches
 ```bash
 # Clear caches
 php artisan config:clear
@@ -80,6 +99,10 @@ php artisan migrate:status
 # Check queue status
 php artisan queue:work --once
 ```
+
+## Verification Commands
+
+After updating the redirect URIs in your OAuth apps:
 
 ## Monitoring
 

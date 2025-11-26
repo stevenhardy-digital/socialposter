@@ -74,18 +74,85 @@ class SocialAccountController extends Controller
     }
 
     /**
-     * Handle OAuth callback and store tokens
+     * Handle OAuth callback from web route and redirect to frontend
+     */
+    public function webCallback(string $platform, Request $request)
+    {
+        try {
+            // Check for OAuth errors
+            if ($request->has('error')) {
+                Log::error('OAuth callback error', [
+                    'platform' => $platform,
+                    'error' => $request->get('error'),
+                    'error_description' => $request->get('error_description'),
+                    'state' => $request->get('state'),
+                ]);
+
+                // Redirect to frontend with error
+                $errorMessage = urlencode($request->get('error_description', $request->get('error')));
+                return redirect("/#/accounts?oauth_error={$platform}&message={$errorMessage}");
+            }
+
+            // Get user from session (should be authenticated)
+            $user = Auth::user();
+            if (!$user) {
+                return redirect("/#/login?message=" . urlencode("Please log in to connect your {$platform} account"));
+            }
+
+            $socialiteUser = Socialite::driver($platform)->user();
+            
+            // Store or update social account
+            $socialAccount = SocialAccount::updateOrCreate(
+                [
+                    'user_id' => $user->id,
+                    'platform' => $platform,
+                    'platform_user_id' => $socialiteUser->getId()
+                ],
+                [
+                    'access_token' => $socialiteUser->token,
+                    'refresh_token' => $socialiteUser->refreshToken,
+                    'expires_at' => $socialiteUser->expiresIn ? now()->addSeconds($socialiteUser->expiresIn) : null,
+                    'account_name' => $socialiteUser->getName() ?? $socialiteUser->getNickname()
+                ]
+            );
+
+            // Redirect to frontend with success
+            return redirect("/#/accounts?oauth_success={$platform}&account=" . urlencode($socialAccount->account_name));
+
+        } catch (Exception $e) {
+            Log::error('OAuth callback failed', [
+                'platform' => $platform,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            $errorMessage = urlencode("Failed to connect {$platform} account: " . $e->getMessage());
+            return redirect("/#/accounts?oauth_error={$platform}&message={$errorMessage}");
+        }
+    }
+
+    /**
+     * Handle OAuth callback and store tokens (API version)
      */
     public function callback(string $platform, Request $request): JsonResponse
     {
         try {
             // Check for OAuth errors
             if ($request->has('error')) {
+                Log::error('OAuth callback error', [
+                    'platform' => $platform,
+                    'error' => $request->get('error'),
+                    'error_description' => $request->get('error_description'),
+                    'state' => $request->get('state'),
+                ]);
+
+                // Return JSON response instead of redirecting to avoid route issues
                 return response()->json([
                     'success' => false,
                     'message' => 'OAuth authorization failed: ' . $request->get('error_description', $request->get('error')),
                     'error_code' => $request->get('error'),
-                    'platform' => $platform
+                    'platform' => $platform,
+                    'redirect_to_frontend' => true
                 ], 400);
             }
 
@@ -218,7 +285,7 @@ class SocialAccountController extends Controller
         return match($platform) {
             'instagram' => ['instagram_basic', 'instagram_content_publish'],
             'facebook' => ['pages_manage_posts', 'pages_read_engagement'],
-            'linkedin' => ['w_member_social', 'r_organization_social'],
+            'linkedin' => ['r_liteprofile', 'w_member_social'],
             default => []
         };
     }

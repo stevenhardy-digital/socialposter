@@ -38,7 +38,7 @@ return [
     'instagram' => [
         'client_id' => env('INSTAGRAM_CLIENT_ID'),
         'client_secret' => env('INSTAGRAM_CLIENT_SECRET'),
-        'redirect' => env('APP_URL') . '/api/social-accounts/callback/instagram',
+        'redirect' => env('APP_URL') . '/auth/callback/instagram',
         'webhook_secret' => env('INSTAGRAM_WEBHOOK_SECRET'),
         'webhook_verify_token' => env('INSTAGRAM_WEBHOOK_VERIFY_TOKEN'),
     ],
@@ -46,7 +46,7 @@ return [
     'facebook' => [
         'client_id' => env('FACEBOOK_CLIENT_ID'),
         'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
-        'redirect' => env('APP_URL') . '/api/social-accounts/callback/facebook',
+        'redirect' => env('APP_URL') . '/auth/callback/facebook',
         'webhook_secret' => env('FACEBOOK_WEBHOOK_SECRET'),
         'webhook_verify_token' => env('FACEBOOK_WEBHOOK_VERIFY_TOKEN'),
     ],
@@ -54,7 +54,7 @@ return [
     'linkedin' => [
         'client_id' => env('LINKEDIN_CLIENT_ID'),
         'client_secret' => env('LINKEDIN_CLIENT_SECRET'),
-        'redirect' => env('APP_URL') . '/api/social-accounts/callback/linkedin',
+        'redirect' => env('APP_URL') . '/auth/callback/linkedin',
         'webhook_secret' => env('LINKEDIN_WEBHOOK_SECRET'),
         'webhook_verify_token' => env('LINKEDIN_WEBHOOK_VERIFY_TOKEN'),
     ],
