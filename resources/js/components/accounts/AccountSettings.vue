@@ -34,6 +34,13 @@
               </div>
               <div class="flex items-center space-x-2">
                 <button
+                  @click="getAccountInfo(account)"
+                  :disabled="loadingInfo[account.id]"
+                  class="px-3 py-1 text-sm text-green-600 hover:text-green-800 disabled:opacity-50"
+                >
+                  {{ loadingInfo[account.id] ? 'Loading...' : 'Details' }}
+                </button>
+                <button
                   @click="refreshToken(account)"
                   :disabled="refreshingTokens[account.id]"
                   class="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
@@ -111,6 +118,7 @@ export default {
     const connecting = reactive({});
     const disconnecting = reactive({});
     const refreshingTokens = reactive({});
+    const loadingInfo = reactive({});
     const message = ref('');
     const messageType = ref('');
     
@@ -172,6 +180,46 @@ export default {
       }
     };
     
+    const getAccountInfo = async (account) => {
+      try {
+        loadingInfo[account.id] = true;
+        const response = await axios.get(`/api/social-accounts/${account.id}/info`);
+        
+        if (response.data.success) {
+          console.log('Account Details:', response.data.details);
+          
+          // Show account details in a more user-friendly way
+          let detailsMessage = `Account: ${account.account_name}\n`;
+          
+          if (response.data.details.profile) {
+            const profile = response.data.details.profile;
+            detailsMessage += `Profile: ${profile.name || 'Unknown'}\n`;
+            if (profile.email) detailsMessage += `Email: ${profile.email}\n`;
+          }
+          
+          if (response.data.details.company_pages && response.data.details.company_pages.length > 0) {
+            detailsMessage += `Company Pages: ${response.data.details.company_pages.length} found\n`;
+            response.data.details.company_pages.forEach(page => {
+              detailsMessage += `- ${page.name}\n`;
+            });
+          }
+          
+          if (response.data.details.permissions) {
+            const permissions = response.data.details.permissions;
+            detailsMessage += `Permissions: ${Object.keys(permissions).filter(k => permissions[k]).join(', ')}`;
+          }
+          
+          alert(detailsMessage);
+        } else {
+          showMessage(response.data.message, 'error');
+        }
+      } catch (error) {
+        showMessage('Failed to get account information', 'error');
+      } finally {
+        loadingInfo[account.id] = false;
+      }
+    };
+
     const refreshToken = async (account) => {
       try {
         refreshingTokens[account.id] = true;
@@ -229,12 +277,14 @@ export default {
       connecting,
       disconnecting,
       refreshingTokens,
+      loadingInfo,
       message,
       messageType,
       availablePlatforms,
       connectAccount,
       disconnectAccount,
-      refreshToken
+      refreshToken,
+      getAccountInfo
     };
   }
 };

@@ -378,6 +378,19 @@ class SocialAccountController extends Controller
                 ], 403);
             }
 
+            // Handle LinkedIn accounts with custom service
+            if ($socialAccount->platform === 'linkedin') {
+                $linkedInService = app(\App\Services\LinkedInOAuthService::class);
+                $accountDetails = $linkedInService->getAccountDetails($socialAccount->access_token);
+                
+                return response()->json([
+                    'success' => true,
+                    'account' => $socialAccount->makeHidden(['access_token', 'refresh_token']),
+                    'details' => $accountDetails
+                ]);
+            }
+
+            // For other platforms, use the general service
             $socialMediaService = app(\App\Services\SocialMediaApiService::class);
             $result = $socialMediaService->getAccountInfo($socialAccount);
 

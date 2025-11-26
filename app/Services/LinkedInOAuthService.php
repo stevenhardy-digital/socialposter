@@ -144,17 +144,159 @@ class LinkedInOAuthService
         $userId = 'linkedin_' . substr(hash('sha256', $accessToken), 0, 16);
         $name = 'LinkedIn User';
 
+        // Try to get additional profile information if possible
+        $profileInfo = $this->tryGetProfileInfo($accessToken);
+        $companyPages = $this->tryGetCompanyPages($accessToken);
+
         return [
-            'id' => $userId,
-            'name' => $name,
+            'id' => $profileInfo['id'] ?? $userId,
+            'name' => $profileInfo['name'] ?? $name,
             'access_token' => $accessToken,
             'refresh_token' => $tokenData['refresh_token'] ?? null,
             'expires_in' => $tokenData['expires_in'] ?? 5184000, // 60 days default
             'state_data' => $stateData, // Include the decoded state data
+            'profile_info' => $profileInfo,
+            'company_pages' => $companyPages,
         ];
     }
 
 
+
+    /**
+     * Try to get profile information with various endpoints
+     */
+    private function tryGetProfileInfo(string $accessToken): array
+    {
+        $profileInfo = [];
+
+        // Try different LinkedIn API endpoints to get profile info
+        $endpoints = [
+            // Basic profile with minimal fields
+            [
+                'url' => 'https://api.linkedin.com/v2/people/~',
+                'params' => ['projection' => '(id)'],
+                'name' => 'basic_profile'
+            ],
+            // Try userinfo endpoint (OpenID Connect)
+            [
+                'url' => 'https://api.linkedin.com/v2/userinfo',
+                'params' => [],
+                'name' => 'userinfo'
+            ],
+            // Try profile with different projection
+            [
+                'url' => 'https://api.linkedin.com/v2/people/~',
+                'params' => ['projection' => '(id,localizedFirstName,localizedLastName)'],
+                'name' => 'localized_profile'
+            ]
+        ];
+
+        foreach ($endpoints as $endpoint) {
+            try {
+                Log::info("Trying LinkedIn endpoint: {$endpoint['name']}", [
+                    'url' => $endpoint['url'],
+                    'params' => $endpoint['params']
+                ]);
+
+                $response = Http::withHeaders([
+                    'Authorization' => "Bearer {$accessToken}",
+                    'X-Restli-Protocol-Version' => '2.0.0'
+                ])->get($endpoint['url'], $endpoint['params']);
+
+                if ($response->successful()) {
+                    $data = $response->json();
+                    Log::info("LinkedIn endpoint {$endpoint['name']} succeeded", [
+                        'data' => $data
+                    ]);
+
+                    // Parse the response based on endpoint type
+                    if ($endpoint['name'] === 'userinfo' && isset($data['sub'])) {
+                        $profileInfo = [
+                            'id' => $data['sub'],
+                            'name' => $data['name'] ?? ($data['given_name'] . ' ' . $data['family_name']),
+                            'email' => $data['email'] ?? null,
+                            'source' => 'userinfo'
+                        ];
+                        break;
+                    } elseif (isset($data['id'])) {
+                        $name = 'LinkedIn User';
+                        if (isset($data['localizedFirstName'], $data['localizedLastName'])) {
+                            $name = trim($data['localizedFirstName'] . ' ' . $data['localizedLastName']);
+                        }
+                        $profileInfo = [
+                            'id' => $data['id'],
+                            'name' => $name,
+                            'source' => $endpoint['name']
+                        ];
+                        break;
+                    }
+                } else {
+                    Log::warning("LinkedIn endpoint {$endpoint['name']} failed", [
+                        'status' => $response->status(),
+                        'response' => $response->body()
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::warning("LinkedIn endpoint {$endpoint['name']} exception", [
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+
+        return $profileInfo;
+    }
+
+    /**
+     * Try to get company pages the user manages
+     */
+    private function tryGetCompanyPages(string $accessToken): array
+    {
+        $companyPages = [];
+
+        try {
+            Log::info('Attempting to fetch LinkedIn company pages');
+
+            // Try to get organizations the user administers
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$accessToken}",
+                'X-Restli-Protocol-Version' => '2.0.0'
+            ])->get('https://api.linkedin.com/v2/organizationAcls', [
+                'q' => 'roleAssignee',
+                'projection' => '(elements*(organization~(id,name,logoV2)))'
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                Log::info('LinkedIn company pages response', [
+                    'data' => $data
+                ]);
+
+                if (isset($data['elements'])) {
+                    foreach ($data['elements'] as $element) {
+                        if (isset($element['organization~'])) {
+                            $org = $element['organization~'];
+                            $companyPages[] = [
+                                'id' => $org['id'],
+                                'name' => $org['name'] ?? 'Unknown Company',
+                                'logo' => $org['logoV2'] ?? null,
+                            ];
+                        }
+                    }
+                }
+            } else {
+                Log::warning('LinkedIn company pages fetch failed', [
+                    'status' => $response->status(),
+                    'response' => $response->body()
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::warning('LinkedIn company pages exception', [
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return $companyPages;
+    }
 
     /**
      * Refresh access token
@@ -183,5 +325,60 @@ class LinkedInOAuthService
             'refresh_token' => $data['refresh_token'] ?? $refreshToken,
             'expires_in' => $data['expires_in'] ?? 5184000,
         ];
+    }
+
+    /**
+     * Get comprehensive account information for a connected LinkedIn account
+     */
+    public function getAccountDetails(string $accessToken): array
+    {
+        $details = [
+            'profile' => $this->tryGetProfileInfo($accessToken),
+            'company_pages' => $this->tryGetCompanyPages($accessToken),
+            'permissions' => $this->getTokenPermissions($accessToken),
+        ];
+
+        return $details;
+    }
+
+    /**
+     * Get the permissions/scopes for the current access token
+     */
+    private function getTokenPermissions(string $accessToken): array
+    {
+        try {
+            // Try to introspect the token to see what permissions it has
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$accessToken}",
+                'X-Restli-Protocol-Version' => '2.0.0'
+            ])->get('https://api.linkedin.com/v2/people/~', [
+                'projection' => '(id)'
+            ]);
+
+            $permissions = ['basic_profile' => $response->successful()];
+
+            // Test other endpoints to see what's available
+            $testEndpoints = [
+                'organizations' => 'https://api.linkedin.com/v2/organizationAcls?q=roleAssignee',
+                'userinfo' => 'https://api.linkedin.com/v2/userinfo',
+            ];
+
+            foreach ($testEndpoints as $name => $url) {
+                try {
+                    $testResponse = Http::withHeaders([
+                        'Authorization' => "Bearer {$accessToken}",
+                        'X-Restli-Protocol-Version' => '2.0.0'
+                    ])->get($url);
+                    
+                    $permissions[$name] = $testResponse->successful();
+                } catch (\Exception $e) {
+                    $permissions[$name] = false;
+                }
+            }
+
+            return $permissions;
+        } catch (\Exception $e) {
+            return ['error' => $e->getMessage()];
+        }
     }
 }
