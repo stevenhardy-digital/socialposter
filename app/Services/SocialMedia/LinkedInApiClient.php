@@ -12,7 +12,7 @@ class LinkedInApiClient extends BaseSocialMediaClient
     protected string $baseUrl = 'https://api.linkedin.com/v2';
     
     /**
-     * Get LinkedIn profile information
+     * Get LinkedIn profile information (enhanced with new scopes)
      */
     public function getProfileInfo(SocialAccount $account): array
     {
@@ -21,7 +21,7 @@ class LinkedInApiClient extends BaseSocialMediaClient
                 'Authorization' => "Bearer {$account->access_token}",
                 'X-Restli-Protocol-Version' => '2.0.0'
             ])->get("{$this->baseUrl}/people/(id:{$account->platform_user_id})", [
-                'projection' => '(id,firstName,lastName,profilePicture(displayImage~:playableStreams))'
+                'projection' => '(id,firstName,lastName,headline,profilePicture(displayImage~:playableStreams),publicProfileUrl)'
             ]);
 
             if ($response->successful()) {
@@ -38,7 +38,59 @@ class LinkedInApiClient extends BaseSocialMediaClient
     }
 
     /**
-     * Get LinkedIn company pages managed by the user
+     * Get profile analytics (requires r_member_profileAnalytics scope)
+     */
+    public function getProfileAnalytics(SocialAccount $account): array
+    {
+        try {
+            $response = Http::timeout(30)->withHeaders([
+                'Authorization' => "Bearer {$account->access_token}",
+                'X-Restli-Protocol-Version' => '2.0.0'
+            ])->get("{$this->baseUrl}/networkSizes/{$account->platform_user_id}", [
+                'edgeType' => 'CompanyFollowedByMember'
+            ]);
+
+            if ($response->successful()) {
+                return [
+                    'success' => true,
+                    'data' => $response->json()
+                ];
+            }
+
+            return $this->handleApiError($response, 'Failed to get LinkedIn profile analytics');
+        } catch (Exception $e) {
+            return $this->handleException($e, 'LinkedIn profile analytics request failed');
+        }
+    }
+
+    /**
+     * Get connection count (requires r_1st_connections_size scope)
+     */
+    public function getConnectionCount(SocialAccount $account): array
+    {
+        try {
+            $response = Http::timeout(30)->withHeaders([
+                'Authorization' => "Bearer {$account->access_token}",
+                'X-Restli-Protocol-Version' => '2.0.0'
+            ])->get("{$this->baseUrl}/people/(id:{$account->platform_user_id})/network/network-sizes", [
+                'edgeType' => 'FIRST_DEGREE'
+            ]);
+
+            if ($response->successful()) {
+                return [
+                    'success' => true,
+                    'data' => $response->json()
+                ];
+            }
+
+            return $this->handleApiError($response, 'Failed to get LinkedIn connection count');
+        } catch (Exception $e) {
+            return $this->handleException($e, 'LinkedIn connection count request failed');
+        }
+    }
+
+    /**
+     * Get LinkedIn company pages managed by the user (enhanced)
      */
     public function getManagedCompanies(SocialAccount $account): array
     {
@@ -49,7 +101,7 @@ class LinkedInApiClient extends BaseSocialMediaClient
             ])->get("{$this->baseUrl}/organizationAcls", [
                 'q' => 'roleAssignee',
                 'role' => 'ADMINISTRATOR',
-                'projection' => '(elements*(organization~(id,name,logoV2(original~:playableStreams))))'
+                'projection' => '(elements*(organization~(id,name,logoV2(original~:playableStreams),followerCount)))'
             ]);
 
             if ($response->successful()) {
@@ -62,6 +114,65 @@ class LinkedInApiClient extends BaseSocialMediaClient
             return $this->handleApiError($response, 'Failed to get LinkedIn managed companies');
         } catch (Exception $e) {
             return $this->handleException($e, 'LinkedIn managed companies request failed');
+        }
+    }
+
+    /**
+     * Get organization followers (requires r_organization_followers scope)
+     */
+    public function getOrganizationFollowers(SocialAccount $account, string $organizationId): array
+    {
+        try {
+            $response = Http::timeout(30)->withHeaders([
+                'Authorization' => "Bearer {$account->access_token}",
+                'X-Restli-Protocol-Version' => '2.0.0'
+            ])->get("{$this->baseUrl}/networkSizes/{$organizationId}", [
+                'edgeType' => 'CompanyFollowedByMember'
+            ]);
+
+            if ($response->successful()) {
+                return [
+                    'success' => true,
+                    'data' => $response->json()
+                ];
+            }
+
+            return $this->handleApiError($response, 'Failed to get organization followers');
+        } catch (Exception $e) {
+            return $this->handleException($e, 'LinkedIn organization followers request failed');
+        }
+    }
+
+    /**
+     * Get organization post analytics (requires r_organization_social scope)
+     */
+    public function getOrganizationPostAnalytics(SocialAccount $account, string $organizationId, array $postIds = []): array
+    {
+        try {
+            $params = [
+                'q' => 'organizationalEntity',
+                'organizationalEntity' => $organizationId,
+            ];
+
+            if (!empty($postIds)) {
+                $params['shares'] = $postIds;
+            }
+
+            $response = Http::timeout(30)->withHeaders([
+                'Authorization' => "Bearer {$account->access_token}",
+                'X-Restli-Protocol-Version' => '2.0.0'
+            ])->get("{$this->baseUrl}/organizationalEntityShareStatistics", $params);
+
+            if ($response->successful()) {
+                return [
+                    'success' => true,
+                    'data' => $response->json()
+                ];
+            }
+
+            return $this->handleApiError($response, 'Failed to get organization post analytics');
+        } catch (Exception $e) {
+            return $this->handleException($e, 'LinkedIn organization post analytics request failed');
         }
     }
 

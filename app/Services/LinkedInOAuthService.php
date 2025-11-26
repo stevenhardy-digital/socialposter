@@ -19,7 +19,26 @@ class LinkedInOAuthService
         $this->clientId = config('services.linkedin.client_id');
         $this->clientSecret = config('services.linkedin.client_secret');
         $this->redirectUri = config('services.linkedin.redirect');
-        $this->scopes = ['r_liteprofile', 'w_member_social']; // Updated LinkedIn v2 scopes
+        // Comprehensive LinkedIn scopes for full functionality
+        $this->scopes = [
+            // Basic profile and connections
+            'r_basicprofile',                    // Basic profile including name, photo, headline
+            'r_1st_connections_size',            // Number of 1st-degree connections
+            
+            // Member social and analytics
+            'w_member_social',                   // Create, modify, delete posts/comments/reactions
+            'w_member_social_feed',              // Create, modify, delete comments/reactions on posts
+            'r_member_postAnalytics',            // Retrieve posts and reporting data
+            'r_member_profileAnalytics',         // Profile analytics, viewers, followers, search appearances
+            
+            // Organization management and social
+            'rw_organization_admin',             // Manage organization pages and retrieve reporting data
+            'w_organization_social',             // Create, modify, delete posts/comments/reactions for organization
+            'w_organization_social_feed',        // Create, modify, delete comments/reactions on organization posts
+            'r_organization_social',             // Retrieve organization posts, comments, reactions, engagement data
+            'r_organization_social_feed',        // Retrieve comments, reactions, engagement data on organization posts
+            'r_organization_followers',          // Use followers' data for mentions in posts
+        ];
     }
 
     /**

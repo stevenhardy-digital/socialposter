@@ -39,7 +39,7 @@
 - **Completely Removed Laravel Socialite**: Created custom OAuth implementations for all platforms
 - **Instagram Business Support**: Proper Facebook Business Manager integration for managed accounts
 - **Facebook Page Management**: Handles multiple pages with correct access tokens
-- LinkedIn now uses only current v2 API scopes (`r_liteprofile`, `w_member_social`)
+- LinkedIn now uses comprehensive v2 API scopes including analytics, organization management, and social posting
 - Moved OAuth callbacks to web routes with proper session support
 - Added proper error handling and frontend redirects
 
@@ -70,12 +70,40 @@
 - Better error messages for debugging OAuth issues
 
 ### ✅ New Custom OAuth Services
-- **LinkedInOAuthService**: Proper v2 API integration with current scopes
+- **LinkedInOAuthService**: Comprehensive v2 API integration with full scope access including analytics and organization management
 - **InstagramOAuthService**: Facebook Business Manager integration for Instagram Business accounts
 - **FacebookOAuthService**: Page management with proper access tokens
 - All services handle authorization, token exchange, refresh, and user data fetching
 - Business account support with page/account selection capabilities
 - Proper error handling and logging for each platform
+
+### ✅ Enhanced LinkedIn Integration
+**Comprehensive LinkedIn Scopes Now Included:**
+- `r_basicprofile` - Basic profile including name, photo, headline, public profile URL
+- `r_1st_connections_size` - Number of 1st-degree connections
+- `w_member_social` - Create, modify, delete posts, comments, reactions
+- `w_member_social_feed` - Create, modify, delete comments/reactions on posts
+- `r_member_postAnalytics` - Retrieve posts and reporting data
+- `r_member_profileAnalytics` - Profile analytics, viewers, followers, search appearances
+- `rw_organization_admin` - Manage organization pages and retrieve reporting data
+- `w_organization_social` - Create, modify, delete posts/comments/reactions for organizations
+- `w_organization_social_feed` - Create, modify, delete comments/reactions on organization posts
+- `r_organization_social` - Retrieve organization posts, comments, reactions, engagement data
+- `r_organization_social_feed` - Retrieve comments, reactions, engagement data on organization posts
+- `r_organization_followers` - Use followers' data for mentions in posts
+
+**New LinkedIn API Methods:**
+- Profile analytics and connection counts
+- Organization follower statistics
+- Enhanced post analytics for organizations
+- Comprehensive organization management
+
+**What This Enables:**
+- Full analytics dashboard for LinkedIn posts and profile performance
+- Organization/company page management and posting
+- Detailed engagement metrics and follower insights
+- Advanced social media management capabilities
+- Professional networking data and connection analytics
 
 ### ✅ Frontend Updates
 - Updated AccountSettings.vue to call `/auth/connect/{platform}` web route
