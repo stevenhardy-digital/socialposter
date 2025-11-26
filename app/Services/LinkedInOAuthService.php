@@ -19,6 +19,13 @@ class LinkedInOAuthService
         $this->clientId = config('services.linkedin.client_id');
         $this->clientSecret = config('services.linkedin.client_secret');
         $this->redirectUri = config('services.linkedin.redirect');
+        
+        // Debug log the configuration
+        Log::info('LinkedIn OAuth Service initialized', [
+            'client_id' => $this->clientId,
+            'redirect_uri' => $this->redirectUri,
+            'app_url' => config('app.url'),
+        ]);
         // Comprehensive LinkedIn scopes for full functionality
         $this->scopes = [
             // Basic profile and connections
@@ -100,20 +107,30 @@ class LinkedInOAuthService
         }
 
         // Exchange code for access token
-        $tokenResponse = Http::asForm()->post('https://www.linkedin.com/oauth/v2/accessToken', [
+        $tokenParams = [
             'grant_type' => 'authorization_code',
             'code' => $code,
             'redirect_uri' => $this->redirectUri,
             'client_id' => $this->clientId,
             'client_secret' => $this->clientSecret,
+        ];
+
+        Log::info('LinkedIn token exchange attempt', [
+            'redirect_uri' => $this->redirectUri,
+            'client_id' => $this->clientId,
+            'code_length' => strlen($code),
+            'code_preview' => substr($code, 0, 10) . '...',
         ]);
+
+        $tokenResponse = Http::asForm()->post('https://www.linkedin.com/oauth/v2/accessToken', $tokenParams);
 
         if (!$tokenResponse->successful()) {
             Log::error('LinkedIn token exchange failed', [
                 'status' => $tokenResponse->status(),
                 'response' => $tokenResponse->body(),
+                'request_params' => array_merge($tokenParams, ['client_secret' => '[REDACTED]']),
             ]);
-            throw new \Exception('Failed to exchange authorization code for access token');
+            throw new \Exception('Failed to exchange authorization code for access token: ' . $tokenResponse->body());
         }
 
         $tokenData = $tokenResponse->json();

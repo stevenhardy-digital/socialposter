@@ -204,7 +204,18 @@ Laravel Socialite requires session middleware to store OAuth state during the au
 
 ## Immediate Actions Required
 
-### 1. Update All Platform Redirect URIs ⚠️ REQUIRED
+### 1. Fix APP_URL Configuration ⚠️ CRITICAL
+**Update your .env file:**
+```env
+# Change from:
+APP_URL=http://localhost
+
+# To:
+APP_URL=https://social.add-digital.co.uk
+```
+**This is critical** - OAuth providers reject token exchanges when redirect URIs don't match exactly.
+
+### 2. Update All Platform Redirect URIs ⚠️ REQUIRED
 Update redirect URIs in all platform developer consoles:
 
 **LinkedIn Developer Console:**
@@ -222,7 +233,7 @@ Update redirect URIs in all platform developer consoles:
 
 ### 3. Deploy and Clear Caches
 ```bash
-# Clear all caches
+# Clear all caches (critical after APP_URL change)
 php artisan config:clear
 php artisan cache:clear
 php artisan route:clear
@@ -231,6 +242,9 @@ php artisan view:clear
 # Rebuild caches
 php artisan config:cache
 php artisan route:cache
+
+# Run migrations for oauth_states table
+php artisan migrate --force
 
 # Test database connection
 php artisan migrate:status
