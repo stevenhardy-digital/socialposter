@@ -46,17 +46,10 @@ class LinkedInOAuthService
      */
     public function getAuthorizationUrl(array $userData = []): string
     {
-        // Create state with user data encoded
-        $stateData = [
-            'random' => Str::random(20),
-            'user_id' => $userData['user_id'] ?? null,
-            'auth_token' => $userData['auth_token'] ?? null,
-            'timestamp' => time(),
-        ];
+        // Use the database state key if provided, otherwise create a simple state
+        $state = $userData['state_key'] ?? Str::random(40);
         
-        $state = base64_encode(json_encode($stateData));
-        
-        // Still store in session as backup
+        // Store in session as backup
         session(['linkedin_oauth_state' => $state]);
 
         $params = [
@@ -75,24 +68,22 @@ class LinkedInOAuthService
      */
     public function handleCallback(Request $request): array
     {
-        // Verify and decode state parameter
+        // Get state parameter
         $state = $request->get('state');
         if (!$state) {
             throw new \Exception('OAuth state parameter missing');
         }
 
-        try {
-            $stateData = json_decode(base64_decode($state), true);
-            if (!$stateData || !isset($stateData['timestamp'])) {
-                throw new \Exception('Invalid OAuth state format');
+        // Try to get state data from database first
+        $stateData = \App\Models\OAuthState::consumeState($state);
+        
+        if (!$stateData) {
+            // Fallback to session verification for backward compatibility
+            $sessionState = session('linkedin_oauth_state');
+            if ($state !== $sessionState) {
+                throw new \Exception('Invalid OAuth state parameter');
             }
-
-            // Check if state is not too old (10 minutes max)
-            if (time() - $stateData['timestamp'] > 600) {
-                throw new \Exception('OAuth state expired');
-            }
-        } catch (\Exception $e) {
-            throw new \Exception('Invalid OAuth state parameter: ' . $e->getMessage());
+            $stateData = []; // Empty state data for session-based flow
         }
 
         // Clear the state from session
