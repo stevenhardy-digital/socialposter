@@ -92,6 +92,7 @@
           >
             {{ message }}
           </div>
+        </div>
   </div>
 </template>
 
