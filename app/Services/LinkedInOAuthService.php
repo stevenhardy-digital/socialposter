@@ -38,25 +38,10 @@ class LinkedInOAuthService
             'redirect_uri' => $this->redirectUri,
             'app_url' => config('app.url'),
         ]);
-        // Comprehensive LinkedIn scopes for full functionality
+        // Basic LinkedIn scopes that should work for most apps
         $this->scopes = [
-            // Basic profile and connections
-            'r_basicprofile',                    // Basic profile including name, photo, headline
-            'r_1st_connections_size',            // Number of 1st-degree connections
-            
-            // Member social and analytics
-            'w_member_social',                   // Create, modify, delete posts/comments/reactions
-            'w_member_social_feed',              // Create, modify, delete comments/reactions on posts
-            'r_member_postAnalytics',            // Retrieve posts and reporting data
-            'r_member_profileAnalytics',         // Profile analytics, viewers, followers, search appearances
-            
-            // Organization management and social
-            'rw_organization_admin',             // Manage organization pages and retrieve reporting data
-            'w_organization_social',             // Create, modify, delete posts/comments/reactions for organization
-            'w_organization_social_feed',        // Create, modify, delete comments/reactions on organization posts
-            'r_organization_social',             // Retrieve organization posts, comments, reactions, engagement data
-            'r_organization_social_feed',        // Retrieve comments, reactions, engagement data on organization posts
-            'r_organization_followers',          // Use followers' data for mentions in posts
+            'r_liteprofile',                     // Basic profile access (current standard)
+            'w_member_social',                   // Post to LinkedIn
         ];
     }
 
@@ -148,12 +133,12 @@ class LinkedInOAuthService
         $tokenData = $tokenResponse->json();
         $accessToken = $tokenData['access_token'];
 
-        // Get user profile information using LinkedIn v2 basic profile API
+        // Get user profile information using LinkedIn v2 lite profile API
         $profileResponse = Http::withHeaders([
             'Authorization' => "Bearer {$accessToken}",
             'X-Restli-Protocol-Version' => '2.0.0'
         ])->get('https://api.linkedin.com/v2/people/~', [
-            'projection' => '(id,localizedFirstName,localizedLastName)'
+            'projection' => '(id,firstName,lastName)'
         ]);
 
         if (!$profileResponse->successful()) {
@@ -172,9 +157,22 @@ class LinkedInOAuthService
             'profile_data' => $profileData,
         ]);
 
-        // Parse LinkedIn v2 people response
+        // Parse LinkedIn v2 lite profile response
         $userId = $profileData['id'];
-        $name = trim(($profileData['localizedFirstName'] ?? '') . ' ' . ($profileData['localizedLastName'] ?? '')) ?: 'LinkedIn User';
+        
+        // Handle localized name format
+        $firstName = '';
+        $lastName = '';
+        
+        if (isset($profileData['firstName']['localized'])) {
+            $firstName = array_values($profileData['firstName']['localized'])[0] ?? '';
+        }
+        
+        if (isset($profileData['lastName']['localized'])) {
+            $lastName = array_values($profileData['lastName']['localized'])[0] ?? '';
+        }
+        
+        $name = trim($firstName . ' ' . $lastName) ?: 'LinkedIn User';
 
         return [
             'id' => $userId,
