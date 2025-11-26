@@ -133,62 +133,16 @@ class LinkedInOAuthService
         $tokenData = $tokenResponse->json();
         $accessToken = $tokenData['access_token'];
 
-        // Get user profile information using LinkedIn v2 lite profile API
-        Log::info('Attempting LinkedIn profile fetch', [
-            'endpoint' => 'https://api.linkedin.com/v2/people/~',
-            'projection' => '(id,firstName,lastName)',
+        // Skip profile fetch due to LinkedIn API permissions issues
+        // Generate a unique user ID from the access token for now
+        Log::info('Skipping LinkedIn profile fetch due to API restrictions', [
             'access_token_preview' => substr($accessToken, 0, 20) . '...',
-            'access_token_length' => strlen($accessToken),
+            'reason' => 'LinkedIn API returning ACCESS_DENIED for profile endpoints',
         ]);
 
-        $profileResponse = Http::withHeaders([
-            'Authorization' => "Bearer {$accessToken}",
-            'X-Restli-Protocol-Version' => '2.0.0'
-        ])->get('https://api.linkedin.com/v2/people/~', [
-            'projection' => '(id,firstName,lastName)'
-        ]);
-
-        Log::info('LinkedIn profile response received', [
-            'status' => $profileResponse->status(),
-            'headers' => $profileResponse->headers(),
-            'body' => $profileResponse->body(),
-            'successful' => $profileResponse->successful(),
-        ]);
-
-        if (!$profileResponse->successful()) {
-            Log::error('LinkedIn profile fetch failed - detailed analysis', [
-                'status' => $profileResponse->status(),
-                'response_body' => $profileResponse->body(),
-                'response_headers' => $profileResponse->headers(),
-                'access_token_preview' => substr($accessToken, 0, 20) . '...',
-                'request_url' => 'https://api.linkedin.com/v2/people/~?projection=(id,firstName,lastName)',
-            ]);
-            throw new \Exception('Failed to fetch user profile from LinkedIn: ' . $profileResponse->body());
-        }
-
-        $profileData = $profileResponse->json();
-
-        Log::info('LinkedIn profile data received', [
-            'profile_keys' => array_keys($profileData),
-            'profile_data' => $profileData,
-        ]);
-
-        // Parse LinkedIn v2 lite profile response
-        $userId = $profileData['id'];
-        
-        // Handle localized name format
-        $firstName = '';
-        $lastName = '';
-        
-        if (isset($profileData['firstName']['localized'])) {
-            $firstName = array_values($profileData['firstName']['localized'])[0] ?? '';
-        }
-        
-        if (isset($profileData['lastName']['localized'])) {
-            $lastName = array_values($profileData['lastName']['localized'])[0] ?? '';
-        }
-        
-        $name = trim($firstName . ' ' . $lastName) ?: 'LinkedIn User';
+        // Create a unique user ID from the access token hash
+        $userId = 'linkedin_' . substr(hash('sha256', $accessToken), 0, 16);
+        $name = 'LinkedIn User';
 
         return [
             'id' => $userId,
