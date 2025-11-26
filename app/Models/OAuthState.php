@@ -19,6 +19,8 @@ class OAuthState extends Model
         'expires_at' => 'datetime',
     ];
 
+    protected $table = 'oauth_states';
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
