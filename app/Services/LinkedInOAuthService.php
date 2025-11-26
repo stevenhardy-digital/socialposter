@@ -38,9 +38,11 @@ class LinkedInOAuthService
             'redirect_uri' => $this->redirectUri,
             'app_url' => config('app.url'),
         ]);
-        // Basic LinkedIn scopes that should work for most apps
+        // Updated LinkedIn scopes for current API
         $this->scopes = [
-            'r_basicprofile',                     // Basic profile access (current standard)
+            'openid',                            // OpenID Connect for basic profile
+            'profile',                           // Basic profile information
+            'email',                             // Email address
             'w_member_social',                   // Post to LinkedIn
         ];
     }
@@ -133,20 +135,13 @@ class LinkedInOAuthService
         $tokenData = $tokenResponse->json();
         $accessToken = $tokenData['access_token'];
 
-        // Skip profile fetch due to LinkedIn API permissions issues
-        // Generate a unique user ID from the access token for now
-        Log::info('Skipping LinkedIn profile fetch due to API restrictions', [
-            'access_token_preview' => substr($accessToken, 0, 20) . '...',
-            'reason' => 'LinkedIn API returning ACCESS_DENIED for profile endpoints',
-        ]);
-
-        // Create a unique user ID from the access token hash
-        $userId = 'linkedin_' . substr(hash('sha256', $accessToken), 0, 16);
-        $name = 'LinkedIn User';
-
-        // Try to get additional profile information if possible
+        // Try to get profile information with updated scopes
         $profileInfo = $this->tryGetProfileInfo($accessToken);
         $companyPages = $this->tryGetCompanyPages($accessToken);
+
+        // Use profile info if available, otherwise generate fallback
+        $userId = $profileInfo['id'] ?? 'linkedin_' . substr(hash('sha256', $accessToken), 0, 16);
+        $name = $profileInfo['name'] ?? 'LinkedIn User';
 
         Log::info('LinkedIn OAuth complete with additional data', [
             'profile_info' => $profileInfo,
@@ -155,8 +150,9 @@ class LinkedInOAuthService
         ]);
 
         return [
-            'id' => $profileInfo['id'] ?? $userId,
-            'name' => $profileInfo['name'] ?? $name,
+            'id' => $userId,
+            'name' => $name,
+            'email' => $profileInfo['email'] ?? null,
             'access_token' => $accessToken,
             'refresh_token' => $tokenData['refresh_token'] ?? null,
             'expires_in' => $tokenData['expires_in'] ?? 5184000, // 60 days default
@@ -169,105 +165,83 @@ class LinkedInOAuthService
 
 
     /**
-     * Try to get profile information with various endpoints
+     * Try to get profile information with available permissions
      */
     private function tryGetProfileInfo(string $accessToken): array
     {
         $profileInfo = [];
+        
+        // Try OpenID Connect userinfo endpoint first (most reliable)
+        try {
+            Log::info('Attempting LinkedIn userinfo endpoint');
+            
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$accessToken}",
+            ])->get('https://api.linkedin.com/v2/userinfo');
 
-        // Try different LinkedIn API endpoints to get profile info
-        $endpoints = [
-            // Most basic - just ID
-            [
-                'url' => 'https://api.linkedin.com/v2/people/~',
-                'params' => ['projection' => '(id)'],
-                'name' => 'basic_id_only'
-            ],
-            // Try with localized names
-            [
-                'url' => 'https://api.linkedin.com/v2/people/~',
-                'params' => ['projection' => '(id,localizedFirstName,localizedLastName)'],
-                'name' => 'localized_names'
-            ],
-            // Try with firstName/lastName structure
-            [
-                'url' => 'https://api.linkedin.com/v2/people/~',
-                'params' => ['projection' => '(id,firstName,lastName)'],
-                'name' => 'structured_names'
-            ],
-            // Try userinfo endpoint (OpenID Connect)
-            [
-                'url' => 'https://api.linkedin.com/v2/userinfo',
-                'params' => [],
-                'name' => 'userinfo'
-            ],
-            // Try with headline and profile picture
-            [
-                'url' => 'https://api.linkedin.com/v2/people/~',
-                'params' => ['projection' => '(id,localizedFirstName,localizedLastName,headline)'],
-                'name' => 'with_headline'
-            ],
-            // Try the lite profile endpoint
-            [
-                'url' => 'https://api.linkedin.com/v2/people/~',
-                'params' => ['projection' => '(id,localizedFirstName,localizedLastName,profilePicture)'],
-                'name' => 'with_picture'
-            ]
-        ];
-
-        foreach ($endpoints as $endpoint) {
-            try {
-                Log::info("Trying LinkedIn endpoint: {$endpoint['name']}", [
-                    'url' => $endpoint['url'],
-                    'params' => $endpoint['params']
-                ]);
-
-                $response = Http::withHeaders([
-                    'Authorization' => "Bearer {$accessToken}",
-                    'X-Restli-Protocol-Version' => '2.0.0'
-                ])->get($endpoint['url'], $endpoint['params']);
-
-                if ($response->successful()) {
-                    $data = $response->json();
-                    Log::info("LinkedIn endpoint {$endpoint['name']} succeeded", [
-                        'data' => $data
-                    ]);
-
-                    // Parse the response based on endpoint type
-                    if ($endpoint['name'] === 'userinfo' && isset($data['sub'])) {
-                        $profileInfo = [
-                            'id' => $data['sub'],
-                            'name' => $data['name'] ?? ($data['given_name'] . ' ' . $data['family_name']),
-                            'email' => $data['email'] ?? null,
-                            'source' => 'userinfo'
-                        ];
-                        break;
-                    } elseif (isset($data['id'])) {
-                        $name = 'LinkedIn User';
-                        if (isset($data['localizedFirstName'], $data['localizedLastName'])) {
-                            $name = trim($data['localizedFirstName'] . ' ' . $data['localizedLastName']);
-                        }
-                        $profileInfo = [
-                            'id' => $data['id'],
-                            'name' => $name,
-                            'source' => $endpoint['name']
-                        ];
-                        break;
-                    }
-                } else {
-                    Log::warning("LinkedIn endpoint {$endpoint['name']} failed", [
-                        'status' => $response->status(),
-                        'response' => $response->body()
-                    ]);
-                }
-            } catch (\Exception $e) {
-                Log::warning("LinkedIn endpoint {$endpoint['name']} exception", [
-                    'error' => $e->getMessage()
+            if ($response->successful()) {
+                $data = $response->json();
+                Log::info('LinkedIn userinfo success', ['data' => $data]);
+                
+                return [
+                    'id' => $data['sub'] ?? null,
+                    'name' => $data['name'] ?? null,
+                    'email' => $data['email'] ?? null,
+                    'picture' => $data['picture'] ?? null,
+                    'source' => 'userinfo'
+                ];
+            } else {
+                Log::warning('LinkedIn endpoint userinfo failed', [
+                    'status' => $response->status(),
+                    'response' => $response->body()
                 ]);
             }
+        } catch (\Exception $e) {
+            Log::warning('LinkedIn userinfo exception', ['error' => $e->getMessage()]);
         }
 
-        return $profileInfo;
+        // Try basic profile endpoint with minimal fields
+        try {
+            Log::info('Attempting LinkedIn basic profile endpoint');
+            
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$accessToken}",
+                'X-Restli-Protocol-Version' => '2.0.0'
+            ])->get('https://api.linkedin.com/v2/people/~', [
+                'projection' => '(id,localizedFirstName,localizedLastName)'
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                Log::info('LinkedIn basic profile success', ['data' => $data]);
+                
+                return [
+                    'id' => $data['id'] ?? null,
+                    'name' => trim(($data['localizedFirstName'] ?? '') . ' ' . ($data['localizedLastName'] ?? '')),
+                    'source' => 'basic_profile'
+                ];
+            } else {
+                Log::warning('LinkedIn endpoint basic profile failed', [
+                    'status' => $response->status(),
+                    'response' => $response->body()
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::warning('LinkedIn basic profile exception', ['error' => $e->getMessage()]);
+        }
+
+        // If all endpoints fail, return limited info
+        Log::info('All LinkedIn profile endpoints failed - using fallback');
+        
+        return [
+            'status' => 'limited_access',
+            'message' => 'LinkedIn app needs "Sign In with LinkedIn using OpenID Connect" product enabled',
+            'required_products' => [
+                'Sign In with LinkedIn using OpenID Connect'
+            ],
+            'current_capabilities' => ['Basic OAuth', 'Posting (w_member_social)'],
+            'source' => 'fallback'
+        ];
     }
 
     /**
@@ -286,7 +260,7 @@ class LinkedInOAuthService
                 'X-Restli-Protocol-Version' => '2.0.0'
             ])->get('https://api.linkedin.com/v2/organizationAcls', [
                 'q' => 'roleAssignee',
-                'projection' => '(elements*(organization~(id,name,logoV2)))'
+                'projection' => '(elements*(organization~(id,name)))'
             ]);
 
             if ($response->successful()) {
@@ -302,7 +276,6 @@ class LinkedInOAuthService
                             $companyPages[] = [
                                 'id' => $org['id'],
                                 'name' => $org['name'] ?? 'Unknown Company',
-                                'logo' => $org['logoV2'] ?? null,
                             ];
                         }
                     }

@@ -12,16 +12,29 @@ class LinkedInApiClient extends BaseSocialMediaClient
     protected string $baseUrl = 'https://api.linkedin.com/v2';
     
     /**
-     * Get LinkedIn profile information (enhanced with new scopes)
+     * Get LinkedIn profile information using OpenID Connect
      */
     public function getProfileInfo(SocialAccount $account): array
     {
         try {
+            // Try userinfo endpoint first (most reliable with OpenID Connect)
+            $response = Http::timeout(30)->withHeaders([
+                'Authorization' => "Bearer {$account->access_token}",
+            ])->get('https://api.linkedin.com/v2/userinfo');
+
+            if ($response->successful()) {
+                return [
+                    'success' => true,
+                    'data' => $response->json()
+                ];
+            }
+
+            // Fallback to basic profile with minimal fields
             $response = Http::timeout(30)->withHeaders([
                 'Authorization' => "Bearer {$account->access_token}",
                 'X-Restli-Protocol-Version' => '2.0.0'
-            ])->get("{$this->baseUrl}/people/(id:{$account->platform_user_id})", [
-                'projection' => '(id,firstName,lastName,headline,profilePicture(displayImage~:playableStreams),publicProfileUrl)'
+            ])->get("{$this->baseUrl}/people/~", [
+                'projection' => '(id,localizedFirstName,localizedLastName)'
             ]);
 
             if ($response->successful()) {
@@ -90,7 +103,7 @@ class LinkedInApiClient extends BaseSocialMediaClient
     }
 
     /**
-     * Get LinkedIn company pages managed by the user (enhanced)
+     * Get LinkedIn company pages managed by the user
      */
     public function getManagedCompanies(SocialAccount $account): array
     {
@@ -100,8 +113,7 @@ class LinkedInApiClient extends BaseSocialMediaClient
                 'X-Restli-Protocol-Version' => '2.0.0'
             ])->get("{$this->baseUrl}/organizationAcls", [
                 'q' => 'roleAssignee',
-                'role' => 'ADMINISTRATOR',
-                'projection' => '(elements*(organization~(id,name,logoV2(original~:playableStreams),followerCount)))'
+                'projection' => '(elements*(organization~(id,name)))'
             ]);
 
             if ($response->successful()) {
