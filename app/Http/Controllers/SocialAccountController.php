@@ -42,9 +42,29 @@ class SocialAccountController extends Controller
                 ], 400);
             }
 
-            // Store user ID in session for callback
-            session(['oauth_user_id' => Auth::id()]);
-            session(['oauth_platform' => $platform]);
+            // Get user from either Sanctum token or session
+            $user = Auth::user() ?? Auth::guard('web')->user();
+            
+            // Check if we have an Authorization header (API request)
+            $authToken = $request->bearerToken();
+            if ($authToken && !$user) {
+                // Try to authenticate with Sanctum
+                $user = Auth::guard('sanctum')->user();
+            }
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Authentication required'
+                ], 401);
+            }
+
+            // Store user ID and auth token in session for callback
+            session([
+                'oauth_user_id' => $user->id,
+                'oauth_platform' => $platform,
+                'oauth_auth_token' => $authToken, // Store the token to re-authenticate later
+            ]);
 
             // Use custom OAuth services for all platforms
             $redirectUrl = match ($platform) {
@@ -98,9 +118,10 @@ class SocialAccountController extends Controller
                 return redirect("/#/accounts?oauth_error={$platform}&message={$errorMessage}");
             }
 
-            // Get user ID from session (stored during OAuth initiation)
+            // Get user ID and auth token from session (stored during OAuth initiation)
             $userId = session('oauth_user_id');
             $sessionPlatform = session('oauth_platform');
+            $authToken = session('oauth_auth_token');
             
             if (!$userId || $sessionPlatform !== $platform) {
                 Log::warning('OAuth callback without valid session', [
@@ -139,11 +160,17 @@ class SocialAccountController extends Controller
                 ]
             );
 
-            // Clean up session data
-            session()->forget(['oauth_user_id', 'oauth_platform']);
+            // Clean up session data but keep auth token for frontend
+            $redirectAuthToken = session('oauth_auth_token');
+            session()->forget(['oauth_user_id', 'oauth_platform', 'oauth_auth_token']);
 
-            // Redirect to frontend with success
-            return redirect("/#/accounts?oauth_success={$platform}&account=" . urlencode($socialAccount->account_name));
+            // Redirect to frontend with success and auth token
+            $redirectUrl = "/#/accounts?oauth_success={$platform}&account=" . urlencode($socialAccount->account_name);
+            if ($redirectAuthToken) {
+                $redirectUrl .= "&token=" . urlencode($redirectAuthToken);
+            }
+            
+            return redirect($redirectUrl);
 
         } catch (Exception $e) {
             Log::error('OAuth callback failed', [
@@ -154,7 +181,7 @@ class SocialAccountController extends Controller
             ]);
 
             // Clean up session data
-            session()->forget(['oauth_user_id', 'oauth_platform']);
+            session()->forget(['oauth_user_id', 'oauth_platform', 'oauth_auth_token']);
 
             $errorMessage = urlencode("Failed to connect {$platform} account: " . $e->getMessage());
             return redirect("/#/accounts?oauth_error={$platform}&message={$errorMessage}");

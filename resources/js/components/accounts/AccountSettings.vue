@@ -196,7 +196,45 @@ export default {
       }, 5000);
     };
     
+    const handleOAuthCallback = () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      
+      // Handle OAuth success
+      if (urlParams.has('oauth_success')) {
+        const platform = urlParams.get('oauth_success');
+        const accountName = urlParams.get('account');
+        const token = urlParams.get('token');
+        
+        // If we have a token, update axios authorization header
+        if (token) {
+          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+          // Store token in localStorage for persistence
+          localStorage.setItem('auth_token', token);
+        }
+        
+        showMessage(`${platform.charAt(0).toUpperCase() + platform.slice(1)} account "${accountName}" connected successfully!`, 'success');
+        
+        // Clean up URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        // Reload accounts
+        loadConnectedAccounts();
+      }
+      
+      // Handle OAuth error
+      if (urlParams.has('oauth_error')) {
+        const platform = urlParams.get('oauth_error');
+        const errorMessage = urlParams.get('message');
+        
+        showMessage(`Failed to connect ${platform}: ${errorMessage}`, 'error');
+        
+        // Clean up URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    };
+    
     onMounted(() => {
+      handleOAuthCallback();
       loadConnectedAccounts();
     });
     

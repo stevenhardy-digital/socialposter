@@ -63,9 +63,10 @@
 ### ✅ SocialAccountController.php Updates
 - Added `webConnect()` method for OAuth initiation with session support
 - Added `webCallback()` method for handling OAuth redirects to frontend
-- **LinkedIn Custom OAuth**: Integrated custom LinkedIn OAuth service to bypass Socialite scope issues
-- **Session Management**: Store user ID in session during OAuth initiation, retrieve during callback
-- **Authentication Fix**: Removed auth middleware from callback route (LinkedIn redirects without auth context)
+- **Authentication Flow Fix**: Stores auth token in session and passes it back to frontend after OAuth
+- **Session Management**: Store user ID and auth token in session during OAuth initiation
+- **No Auth Middleware on Callback**: Callback route has no authentication requirements (external redirect)
+- **Token Restoration**: Frontend receives auth token in redirect URL to restore authentication
 - Improved error logging with session status information
 - Better error messages for debugging OAuth issues
 
@@ -105,8 +106,22 @@
 - Advanced social media management capabilities
 - Professional networking data and connection analytics
 
+### ✅ OAuth Authentication Flow Fix
+**The Problem**: When LinkedIn redirects back to your app, the user appears "logged out" because there's no authentication context in the external redirect.
+
+**The Solution**: 
+1. **Connect Route**: Stores user's auth token in session before redirecting to OAuth
+2. **Callback Route**: No authentication required (it's an external redirect)
+3. **Token Restoration**: Passes the auth token back to frontend in the redirect URL
+4. **Frontend Handling**: Automatically restores authentication and shows success message
+
+**User Experience**: Users stay logged in throughout the OAuth flow and see immediate feedback when accounts are connected.
+
 ### ✅ Frontend Updates
 - Updated AccountSettings.vue to call `/auth/connect/{platform}` web route
+- **OAuth Callback Handling**: Added URL parameter processing for OAuth success/error
+- **Token Restoration**: Automatically restores authentication token after OAuth redirect
+- **User Experience**: Shows success/error messages and refreshes account list after OAuth
 - OAuth flow now properly uses session-enabled routes
 
 ### ✅ Error Handling Improvements
