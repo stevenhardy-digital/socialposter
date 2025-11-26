@@ -26,15 +26,20 @@
 
 ### ✅ OAuth Flow Fixes
 - **LinkedIn Scopes**: Updated to use correct v2 scopes (`r_liteprofile`, `w_member_social`)
-- **Callback Routes**: Moved OAuth callbacks to web routes for proper session support
+- **OAuth Routes**: Moved both connect and callback to web routes for proper session support
+- **Frontend Update**: Updated frontend to call `/auth/connect/{platform}` instead of API route
 - **Error Handling**: Improved OAuth error handling to redirect to frontend instead of missing login route
 - **Redirect URLs**: Updated all platforms to use `/auth/callback/{platform}` web routes
 
 ### ✅ SocialAccountController.php Updates
+- Added `webConnect()` method for OAuth initiation with session support
 - Added `webCallback()` method for handling OAuth redirects to frontend
-- Added session initialization check in `connect()` method
 - Improved error logging with session status information
 - Better error messages for debugging OAuth issues
+
+### ✅ Frontend Updates
+- Updated AccountSettings.vue to call `/auth/connect/{platform}` web route
+- OAuth flow now properly uses session-enabled routes
 
 ### ✅ Sessions Table
 - Confirmed sessions table exists in database
@@ -88,10 +93,15 @@ In your LinkedIn Developer Console:
 
 ### 3. Deploy and Clear Caches
 ```bash
-# Clear caches
+# Clear all caches
 php artisan config:clear
 php artisan cache:clear
+php artisan route:clear
+php artisan view:clear
+
+# Rebuild caches
 php artisan config:cache
+php artisan route:cache
 
 # Test database connection
 php artisan migrate:status

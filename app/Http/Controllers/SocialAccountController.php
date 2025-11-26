@@ -74,6 +74,50 @@ class SocialAccountController extends Controller
     }
 
     /**
+     * Initiate OAuth flow from web route (with session support)
+     */
+    public function webConnect(string $platform, Request $request): JsonResponse
+    {
+        try {
+            $validPlatforms = ['instagram', 'facebook', 'linkedin'];
+            
+            if (!in_array($platform, $validPlatforms)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid platform specified'
+                ], 400);
+            }
+
+            // Configure platform-specific scopes
+            $scopes = $this->getScopesForPlatform($platform);
+            
+            $redirectUrl = Socialite::driver($platform)
+                ->scopes($scopes)
+                ->redirect()
+                ->getTargetUrl();
+
+            return response()->json([
+                'success' => true,
+                'redirect_url' => $redirectUrl,
+                'platform' => $platform
+            ]);
+        } catch (Exception $e) {
+            Log::error('OAuth initiation failed (web route)', [
+                'platform' => $platform,
+                'error' => $e->getMessage(),
+                'session_started' => session()->isStarted(),
+                'session_driver' => config('session.driver'),
+                'user_id' => Auth::id(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to initiate OAuth flow: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Handle OAuth callback from web route and redirect to frontend
      */
     public function webCallback(string $platform, Request $request)

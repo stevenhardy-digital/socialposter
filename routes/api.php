@@ -36,7 +36,6 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     // Social accounts routes
     Route::prefix('social-accounts')->group(function () {
         Route::get('/', [SocialAccountController::class, 'index']);
-        Route::post('connect/{platform}', [SocialAccountController::class, 'connect']);
         Route::delete('{socialAccount}', [SocialAccountController::class, 'disconnect']);
         Route::post('{socialAccount}/refresh', [SocialAccountController::class, 'refreshToken']);
         Route::post('{socialAccount}/webhooks/subscribe', [SocialAccountController::class, 'subscribeToWebhooks']);

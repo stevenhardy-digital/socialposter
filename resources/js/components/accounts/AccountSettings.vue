@@ -132,7 +132,7 @@ export default {
     const connectAccount = async (platform) => {
       try {
         connecting[platform] = true;
-        const response = await axios.post(`/api/social-accounts/connect/${platform}`);
+        const response = await axios.post(`/auth/connect/${platform}`);
         
         if (response.data.success) {
           // Redirect to OAuth URL
