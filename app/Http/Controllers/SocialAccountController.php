@@ -88,6 +88,10 @@ class SocialAccountController extends Controller
                 ], 400);
             }
 
+            // Store user ID in session for callback
+            session(['oauth_user_id' => Auth::id()]);
+            session(['oauth_platform' => $platform]);
+
             // Configure platform-specific scopes
             $scopes = $this->getScopesForPlatform($platform);
             
@@ -132,15 +136,31 @@ class SocialAccountController extends Controller
                     'state' => $request->get('state'),
                 ]);
 
+                // Clean up session data
+                session()->forget(['oauth_user_id', 'oauth_platform']);
+
                 // Redirect to frontend with error
                 $errorMessage = urlencode($request->get('error_description', $request->get('error')));
                 return redirect("/#/accounts?oauth_error={$platform}&message={$errorMessage}");
             }
 
-            // Get user from session (should be authenticated)
-            $user = Auth::user();
+            // Get user ID from session (stored during OAuth initiation)
+            $userId = session('oauth_user_id');
+            $sessionPlatform = session('oauth_platform');
+            
+            if (!$userId || $sessionPlatform !== $platform) {
+                Log::warning('OAuth callback without valid session', [
+                    'platform' => $platform,
+                    'session_platform' => $sessionPlatform,
+                    'user_id' => $userId,
+                    'session_id' => session()->getId(),
+                ]);
+                return redirect("/#/login?message=" . urlencode("OAuth session expired. Please try connecting your {$platform} account again."));
+            }
+
+            $user = \App\Models\User::find($userId);
             if (!$user) {
-                return redirect("/#/login?message=" . urlencode("Please log in to connect your {$platform} account"));
+                return redirect("/#/login?message=" . urlencode("User not found. Please log in and try again."));
             }
 
             $socialiteUser = Socialite::driver($platform)->user();
@@ -160,6 +180,9 @@ class SocialAccountController extends Controller
                 ]
             );
 
+            // Clean up session data
+            session()->forget(['oauth_user_id', 'oauth_platform']);
+
             // Redirect to frontend with success
             return redirect("/#/accounts?oauth_success={$platform}&account=" . urlencode($socialAccount->account_name));
 
@@ -167,8 +190,12 @@ class SocialAccountController extends Controller
             Log::error('OAuth callback failed', [
                 'platform' => $platform,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
+                'user_id' => session('oauth_user_id'),
             ]);
+
+            // Clean up session data
+            session()->forget(['oauth_user_id', 'oauth_platform']);
 
             $errorMessage = urlencode("Failed to connect {$platform} account: " . $e->getMessage());
             return redirect("/#/accounts?oauth_error={$platform}&message={$errorMessage}");

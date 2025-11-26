@@ -9,8 +9,9 @@
 ### 2. OAuth LinkedIn Connection Error ✅ FIXED  
 **Problem**: Multiple OAuth issues:
 - "Session store not set on request" error during OAuth flow
-- LinkedIn scope `r_emailaddress` not authorized (deprecated scope)
+- LinkedIn scope `r_emailaddress` not authorized (deprecated scope) - **THIS IS THE CURRENT ERROR**
 - Route [login] not defined error on callback failures
+- Authentication context lost during OAuth callback
 
 **Solution**: 
 - Moved OAuth callbacks to web routes with proper session support
@@ -34,6 +35,8 @@
 ### ✅ SocialAccountController.php Updates
 - Added `webConnect()` method for OAuth initiation with session support
 - Added `webCallback()` method for handling OAuth redirects to frontend
+- **Session Management**: Store user ID in session during OAuth initiation, retrieve during callback
+- **Authentication Fix**: Removed auth middleware from callback route (LinkedIn redirects without auth context)
 - Improved error logging with session status information
 - Better error messages for debugging OAuth issues
 
@@ -81,11 +84,12 @@ Laravel Socialite requires session middleware to store OAuth state during the au
 
 ## Immediate Actions Required
 
-### 1. Update LinkedIn App Configuration
+### 1. Update LinkedIn App Configuration ⚠️ CRITICAL
 In your LinkedIn Developer Console:
 - Update redirect URI from `/api/social-accounts/callback/linkedin` to `/auth/callback/linkedin`
+- **Remove the deprecated scope `r_emailaddress`** - this is causing the current error
 - Ensure your app has the correct scopes: `r_liteprofile` and `w_member_social`
-- Remove any deprecated scopes like `r_emailaddress`
+- Save the changes and wait a few minutes for LinkedIn to propagate the updates
 
 ### 2. Update Other Platform Redirect URIs
 - **Instagram**: Change to `/auth/callback/instagram`
