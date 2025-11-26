@@ -40,7 +40,7 @@ class LinkedInOAuthService
         ]);
         // Basic LinkedIn scopes that should work for most apps
         $this->scopes = [
-            'r_liteprofile',                     // Basic profile access (current standard)
+            'r_basicprofile',                     // Basic profile access (current standard)
             'w_member_social',                   // Post to LinkedIn
         ];
     }
