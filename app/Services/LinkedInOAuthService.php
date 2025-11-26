@@ -134,6 +134,13 @@ class LinkedInOAuthService
         $accessToken = $tokenData['access_token'];
 
         // Get user profile information using LinkedIn v2 lite profile API
+        Log::info('Attempting LinkedIn profile fetch', [
+            'endpoint' => 'https://api.linkedin.com/v2/people/~',
+            'projection' => '(id,firstName,lastName)',
+            'access_token_preview' => substr($accessToken, 0, 20) . '...',
+            'access_token_length' => strlen($accessToken),
+        ]);
+
         $profileResponse = Http::withHeaders([
             'Authorization' => "Bearer {$accessToken}",
             'X-Restli-Protocol-Version' => '2.0.0'
@@ -141,13 +148,22 @@ class LinkedInOAuthService
             'projection' => '(id,firstName,lastName)'
         ]);
 
+        Log::info('LinkedIn profile response received', [
+            'status' => $profileResponse->status(),
+            'headers' => $profileResponse->headers(),
+            'body' => $profileResponse->body(),
+            'successful' => $profileResponse->successful(),
+        ]);
+
         if (!$profileResponse->successful()) {
-            Log::error('LinkedIn profile fetch failed', [
+            Log::error('LinkedIn profile fetch failed - detailed analysis', [
                 'status' => $profileResponse->status(),
-                'response' => $profileResponse->body(),
+                'response_body' => $profileResponse->body(),
+                'response_headers' => $profileResponse->headers(),
                 'access_token_preview' => substr($accessToken, 0, 20) . '...',
+                'request_url' => 'https://api.linkedin.com/v2/people/~?projection=(id,firstName,lastName)',
             ]);
-            throw new \Exception('Failed to fetch user profile from LinkedIn');
+            throw new \Exception('Failed to fetch user profile from LinkedIn: ' . $profileResponse->body());
         }
 
         $profileData = $profileResponse->json();
