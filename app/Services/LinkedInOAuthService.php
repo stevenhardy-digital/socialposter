@@ -20,9 +20,21 @@ class LinkedInOAuthService
         $this->clientSecret = config('services.linkedin.client_secret');
         $this->redirectUri = config('services.linkedin.redirect');
         
+        // Validate credentials are set
+        if (empty($this->clientId) || empty($this->clientSecret)) {
+            Log::error('LinkedIn OAuth credentials missing', [
+                'client_id_set' => !empty($this->clientId),
+                'client_secret_set' => !empty($this->clientSecret),
+                'redirect_uri' => $this->redirectUri,
+            ]);
+            throw new \Exception('LinkedIn OAuth credentials not configured. Please set LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET in your .env file.');
+        }
+        
         // Debug log the configuration
         Log::info('LinkedIn OAuth Service initialized', [
             'client_id' => $this->clientId,
+            'client_id_length' => strlen($this->clientId),
+            'client_secret_length' => strlen($this->clientSecret),
             'redirect_uri' => $this->redirectUri,
             'app_url' => config('app.url'),
         ]);

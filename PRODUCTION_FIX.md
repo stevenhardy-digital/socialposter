@@ -215,6 +215,20 @@ APP_URL=https://social.add-digital.co.uk
 ```
 **This is critical** - OAuth providers reject token exchanges when redirect URIs don't match exactly.
 
+### 1.5. Add OAuth Credentials ⚠️ REQUIRED
+**Add to your .env file:**
+```env
+# LinkedIn OAuth Credentials (get from https://www.linkedin.com/developers/apps)
+LINKEDIN_CLIENT_ID=your_linkedin_client_id
+LINKEDIN_CLIENT_SECRET=your_linkedin_client_secret
+
+# Instagram/Facebook OAuth Credentials (get from https://developers.facebook.com)
+INSTAGRAM_CLIENT_ID=your_instagram_client_id
+INSTAGRAM_CLIENT_SECRET=your_instagram_client_secret
+FACEBOOK_CLIENT_ID=your_facebook_client_id
+FACEBOOK_CLIENT_SECRET=your_facebook_client_secret
+```
+
 ### 2. Update All Platform Redirect URIs ⚠️ REQUIRED
 Update redirect URIs in all platform developer consoles:
 
