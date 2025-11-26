@@ -228,6 +228,14 @@ class SystemController extends Controller
     private function checkRedis(): array
     {
         try {
+            // Only check Redis if it's actually configured as the cache driver
+            if (config('cache.default') !== 'redis' && config('session.driver') !== 'redis') {
+                return [
+                    'status' => 'skipped',
+                    'message' => 'Redis not configured as cache or session driver',
+                ];
+            }
+
             Redis::ping();
             return [
                 'status' => 'healthy',
@@ -236,7 +244,7 @@ class SystemController extends Controller
             ];
         } catch (\Exception $e) {
             return [
-                'status' => 'unhealthy',
+                'status' => 'warning',
                 'message' => 'Redis connection failed: ' . $e->getMessage(),
             ];
         }
@@ -404,9 +412,10 @@ class SystemController extends Controller
     private function getQuickSystemStatus(): array
     {
         return Cache::remember('system_status', 300, function () {
+            $redisCheck = $this->checkRedis();
             return [
                 'database' => $this->checkDatabase()['status'],
-                'redis' => $this->checkRedis()['status'],
+                'redis' => $redisCheck['status'] === 'skipped' ? 'not_configured' : $redisCheck['status'],
                 'queue' => $this->checkQueue()['status'],
             ];
         });

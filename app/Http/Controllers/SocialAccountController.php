@@ -40,6 +40,11 @@ class SocialAccountController extends Controller
                 ], 400);
             }
 
+            // Check if session is available
+            if (!session()->isStarted()) {
+                session()->start();
+            }
+
             // Configure platform-specific scopes
             $scopes = $this->getScopesForPlatform($platform);
             
@@ -56,12 +61,14 @@ class SocialAccountController extends Controller
         } catch (Exception $e) {
             Log::error('OAuth initiation failed', [
                 'platform' => $platform,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'session_started' => session()->isStarted(),
+                'session_driver' => config('session.driver'),
             ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to initiate OAuth flow'
+                'message' => 'Failed to initiate OAuth flow: ' . $e->getMessage()
             ], 500);
         }
     }
