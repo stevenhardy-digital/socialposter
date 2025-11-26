@@ -148,26 +148,31 @@ class LinkedInOAuthService
         $tokenData = $tokenResponse->json();
         $accessToken = $tokenData['access_token'];
 
-        // Get user profile information
+        // Get user profile information using current LinkedIn v2 API
         $profileResponse = Http::withHeaders([
             'Authorization' => "Bearer {$accessToken}",
-        ])->get('https://api.linkedin.com/v2/people/~', [
-            'projection' => '(id,firstName,lastName,profilePicture(displayImage~:playableStreams))'
-        ]);
+            'X-Restli-Protocol-Version' => '2.0.0'
+        ])->get('https://api.linkedin.com/v2/userinfo');
 
         if (!$profileResponse->successful()) {
             Log::error('LinkedIn profile fetch failed', [
                 'status' => $profileResponse->status(),
                 'response' => $profileResponse->body(),
+                'access_token_preview' => substr($accessToken, 0, 20) . '...',
             ]);
             throw new \Exception('Failed to fetch user profile from LinkedIn');
         }
 
         $profileData = $profileResponse->json();
 
+        Log::info('LinkedIn profile data received', [
+            'profile_keys' => array_keys($profileData),
+            'profile_data' => $profileData,
+        ]);
+
         return [
-            'id' => $profileData['id'],
-            'name' => $this->formatName($profileData),
+            'id' => $profileData['sub'], // LinkedIn userinfo uses 'sub' for user ID
+            'name' => $profileData['name'] ?? ($profileData['given_name'] . ' ' . $profileData['family_name']),
             'access_token' => $accessToken,
             'refresh_token' => $tokenData['refresh_token'] ?? null,
             'expires_in' => $tokenData['expires_in'] ?? 5184000, // 60 days default
@@ -175,20 +180,7 @@ class LinkedInOAuthService
         ];
     }
 
-    /**
-     * Format user name from LinkedIn profile data
-     */
-    private function formatName(array $profileData): string
-    {
-        $firstName = $profileData['firstName']['localized'] ?? [];
-        $lastName = $profileData['lastName']['localized'] ?? [];
 
-        // Get the first available localized name
-        $firstNameValue = !empty($firstName) ? array_values($firstName)[0] : '';
-        $lastNameValue = !empty($lastName) ? array_values($lastName)[0] : '';
-
-        return trim($firstNameValue . ' ' . $lastNameValue) ?: 'LinkedIn User';
-    }
 
     /**
      * Refresh access token

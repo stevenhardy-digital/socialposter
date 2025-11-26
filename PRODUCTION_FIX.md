@@ -79,6 +79,12 @@
 - Proper error handling and logging for each platform
 
 ### ✅ Enhanced LinkedIn Integration
+**Fixed LinkedIn API Compatibility:**
+- Updated to use `/v2/userinfo` endpoint (current standard)
+- Removed deprecated profile projection fields
+- Fixed "ACCESS_DENIED" and "memberId" field errors
+- Uses OpenID Connect standard for profile data
+
 **Comprehensive LinkedIn Scopes Now Included:**
 - `r_basicprofile` - Basic profile including name, photo, headline, public profile URL
 - `r_1st_connections_size` - Number of 1st-degree connections
