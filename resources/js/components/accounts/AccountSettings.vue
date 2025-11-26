@@ -98,11 +98,14 @@
 
 <script>
 import { ref, onMounted, reactive } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 
 export default {
   name: 'AccountSettings',
   setup() {
+    const route = useRoute();
+    const router = useRouter();
     const connectedAccounts = ref([]);
     const loading = ref(true);
     const connecting = reactive({});
@@ -196,45 +199,27 @@ export default {
       }, 5000);
     };
     
-    const handleOAuthCallback = () => {
-      const urlParams = new URLSearchParams(window.location.search);
+    const handleRouterMessages = () => {
+      // Get router instance
+      const route = useRoute();
       
-      // Handle OAuth success
-      if (urlParams.has('oauth_success')) {
-        const platform = urlParams.get('oauth_success');
-        const accountName = urlParams.get('account');
-        const token = urlParams.get('token');
-        
-        // If we have a token, update axios authorization header
-        if (token) {
-          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          // Store token in localStorage for persistence
-          localStorage.setItem('auth_token', token);
-        }
-        
-        showMessage(`${platform.charAt(0).toUpperCase() + platform.slice(1)} account "${accountName}" connected successfully!`, 'success');
-        
-        // Clean up URL
-        window.history.replaceState({}, document.title, window.location.pathname);
-        
-        // Reload accounts
-        loadConnectedAccounts();
+      // Handle success message from router
+      if (route.query.success) {
+        showMessage(route.query.success, 'success');
+        // Clean up query parameters
+        router.replace({ name: 'AccountSettings' });
       }
       
-      // Handle OAuth error
-      if (urlParams.has('oauth_error')) {
-        const platform = urlParams.get('oauth_error');
-        const errorMessage = urlParams.get('message');
-        
-        showMessage(`Failed to connect ${platform}: ${errorMessage}`, 'error');
-        
-        // Clean up URL
-        window.history.replaceState({}, document.title, window.location.pathname);
+      // Handle error message from router
+      if (route.query.error) {
+        showMessage(route.query.error, 'error');
+        // Clean up query parameters
+        router.replace({ name: 'AccountSettings' });
       }
     };
     
     onMounted(() => {
-      handleOAuthCallback();
+      handleRouterMessages();
       loadConnectedAccounts();
     });
     

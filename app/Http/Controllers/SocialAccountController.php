@@ -113,9 +113,9 @@ class SocialAccountController extends Controller
                 // Clean up session data
                 session()->forget(['oauth_user_id', 'oauth_platform']);
 
-                // Redirect to frontend with error
+                // Redirect to OAuth callback handler with error
                 $errorMessage = urlencode($request->get('error_description', $request->get('error')));
-                return redirect("/#/accounts?oauth_error={$platform}&message={$errorMessage}");
+                return redirect("/#/oauth-callback?oauth_error={$platform}&message={$errorMessage}");
             }
 
             // Get user ID and auth token from session (stored during OAuth initiation)
@@ -130,12 +130,12 @@ class SocialAccountController extends Controller
                     'user_id' => $userId,
                     'session_id' => session()->getId(),
                 ]);
-                return redirect("/#/login?message=" . urlencode("OAuth session expired. Please try connecting your {$platform} account again."));
+                return redirect("/#/oauth-callback?oauth_error={$platform}&message=" . urlencode("OAuth session expired. Please try connecting your account again."));
             }
 
             $user = \App\Models\User::find($userId);
             if (!$user) {
-                return redirect("/#/login?message=" . urlencode("User not found. Please log in and try again."));
+                return redirect("/#/oauth-callback?oauth_error={$platform}&message=" . urlencode("User not found. Please log in and try again."));
             }
 
             // Use custom OAuth services for all platforms
@@ -164,8 +164,8 @@ class SocialAccountController extends Controller
             $redirectAuthToken = session('oauth_auth_token');
             session()->forget(['oauth_user_id', 'oauth_platform', 'oauth_auth_token']);
 
-            // Redirect to frontend with success and auth token
-            $redirectUrl = "/#/accounts?oauth_success={$platform}&account=" . urlencode($socialAccount->account_name);
+            // Redirect to OAuth callback handler (not auth-protected)
+            $redirectUrl = "/#/oauth-callback?oauth_success={$platform}&account=" . urlencode($socialAccount->account_name);
             if ($redirectAuthToken) {
                 $redirectUrl .= "&token=" . urlencode($redirectAuthToken);
             }
@@ -184,7 +184,7 @@ class SocialAccountController extends Controller
             session()->forget(['oauth_user_id', 'oauth_platform', 'oauth_auth_token']);
 
             $errorMessage = urlencode("Failed to connect {$platform} account: " . $e->getMessage());
-            return redirect("/#/accounts?oauth_error={$platform}&message={$errorMessage}");
+            return redirect("/#/oauth-callback?oauth_error={$platform}&message={$errorMessage}");
         }
     }
 

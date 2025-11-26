@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/auth';
 // Import components
 import Login from '../components/auth/Login.vue';
 import Register from '../components/auth/Register.vue';
+import OAuthCallback from '../components/auth/OAuthCallback.vue';
 import Layout from '../components/layout/Layout.vue';
 import Dashboard from '../components/Dashboard.vue';
 import AccountSettings from '../components/accounts/AccountSettings.vue';
@@ -25,6 +26,12 @@ const routes = [
         name: 'Register',
         component: Register,
         meta: { requiresGuest: true }
+    },
+    {
+        path: '/oauth-callback',
+        name: 'OAuthCallback',
+        component: OAuthCallback,
+        // No auth requirements - this handles the OAuth redirect
     },
     {
         path: '/',
