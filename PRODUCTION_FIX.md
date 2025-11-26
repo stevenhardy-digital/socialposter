@@ -9,13 +9,38 @@
 ### 2. OAuth LinkedIn Connection Error ✅ FIXED  
 **Problem**: Multiple OAuth issues:
 - "Session store not set on request" error during OAuth flow
-- LinkedIn scope `r_emailaddress` not authorized (deprecated scope) - **THIS IS THE CURRENT ERROR**
+- LinkedIn scope `r_emailaddress` not authorized (deprecated scope) - **PERSISTENT ERROR**
 - Route [login] not defined error on callback failures
 - Authentication context lost during OAuth callback
+- Laravel Socialite LinkedIn driver using outdated default scopes
+
+### 3. Instagram Business Account Issues ✅ FIXED
+**Problem**:
+- Difficulty connecting Instagram Business accounts managed through Facebook Business Manager
+- Socialite doesn't handle Facebook page-to-Instagram account relationships properly
+- Business accounts require specific scopes and API endpoints
+
+**Solution**:
+- Custom Instagram OAuth service that properly handles Facebook Business Manager integration
+- Automatically discovers Instagram Business accounts linked to Facebook pages
+- Uses correct Facebook Graph API endpoints for business account management
+- Supports multiple Instagram accounts per user
+
+### 4. Rate Limiting & Error Messages ✅ FIXED
+**Problem**: 
+- "Too Many Attempts" errors for `/api/auth/user` endpoint
+- Generic "Internal server error" messages hiding real issues
+
+**Solution**:
+- Increased rate limits and added specific limits for user info endpoint
+- Updated error handling to show meaningful messages while remaining secure
 
 **Solution**: 
+- **Completely Removed Laravel Socialite**: Created custom OAuth implementations for all platforms
+- **Instagram Business Support**: Proper Facebook Business Manager integration for managed accounts
+- **Facebook Page Management**: Handles multiple pages with correct access tokens
+- LinkedIn now uses only current v2 API scopes (`r_liteprofile`, `w_member_social`)
 - Moved OAuth callbacks to web routes with proper session support
-- Updated LinkedIn scopes to use current v2 API scopes
 - Added proper error handling and frontend redirects
 
 ## Applied Fixes
@@ -25,24 +50,42 @@
 - Updated `getQuickSystemStatus()` to handle Redis gracefully
 - Health check now returns proper status even with database-only setup
 
-### ✅ OAuth Flow Fixes
-- **LinkedIn Scopes**: Updated to use correct v2 scopes (`r_liteprofile`, `w_member_social`)
-- **OAuth Routes**: Moved both connect and callback to web routes for proper session support
-- **Frontend Update**: Updated frontend to call `/auth/connect/{platform}` instead of API route
-- **Error Handling**: Improved OAuth error handling to redirect to frontend instead of missing login route
-- **Redirect URLs**: Updated all platforms to use `/auth/callback/{platform}` web routes
+### ✅ OAuth Flow Fixes - COMPLETE SOCIALITE REMOVAL
+- **Removed Laravel Socialite Completely**: Replaced with custom OAuth services for all platforms (LinkedIn, Instagram, Facebook)
+- **Instagram Business Account Support**: Custom Instagram OAuth properly handles Facebook Business Manager accounts
+- **Facebook Page Management**: Custom Facebook OAuth with proper page access token handling
+- **LinkedIn v2 API**: Uses only current scopes (`r_liteprofile`, `w_member_social`) - no more deprecated scope errors
+- **OAuth Routes**: All platforms use web routes for proper session support
+- **Frontend Update**: Updated frontend to call `/auth/connect/{platform}` web routes
+- **Error Handling**: Improved OAuth error handling with platform-specific implementations
+- **Business Account Ready**: Properly handles Instagram Business accounts managed through Facebook Business Manager
 
 ### ✅ SocialAccountController.php Updates
 - Added `webConnect()` method for OAuth initiation with session support
 - Added `webCallback()` method for handling OAuth redirects to frontend
+- **LinkedIn Custom OAuth**: Integrated custom LinkedIn OAuth service to bypass Socialite scope issues
 - **Session Management**: Store user ID in session during OAuth initiation, retrieve during callback
 - **Authentication Fix**: Removed auth middleware from callback route (LinkedIn redirects without auth context)
 - Improved error logging with session status information
 - Better error messages for debugging OAuth issues
 
+### ✅ New Custom OAuth Services
+- **LinkedInOAuthService**: Proper v2 API integration with current scopes
+- **InstagramOAuthService**: Facebook Business Manager integration for Instagram Business accounts
+- **FacebookOAuthService**: Page management with proper access tokens
+- All services handle authorization, token exchange, refresh, and user data fetching
+- Business account support with page/account selection capabilities
+- Proper error handling and logging for each platform
+
 ### ✅ Frontend Updates
 - Updated AccountSettings.vue to call `/auth/connect/{platform}` web route
 - OAuth flow now properly uses session-enabled routes
+
+### ✅ Error Handling Improvements
+- **Real Error Messages**: Updated exception handler to show meaningful error messages instead of generic "Internal server error"
+- **Rate Limiting**: Increased API rate limits (60→120 per minute) and added higher limits for user info endpoint (200 per minute)
+- **Specific Error Types**: Added proper error categorization (rate_limit_exceeded, authentication_required, etc.)
+- **Better User Experience**: Users now see actionable error messages like "Too many requests. Please wait a moment and try again."
 
 ### ✅ Sessions Table
 - Confirmed sessions table exists in database
@@ -84,16 +127,21 @@ Laravel Socialite requires session middleware to store OAuth state during the au
 
 ## Immediate Actions Required
 
-### 1. Update LinkedIn App Configuration ⚠️ CRITICAL
-In your LinkedIn Developer Console:
-- Update redirect URI from `/api/social-accounts/callback/linkedin` to `/auth/callback/linkedin`
-- **Remove the deprecated scope `r_emailaddress`** - this is causing the current error
-- Ensure your app has the correct scopes: `r_liteprofile` and `w_member_social`
-- Save the changes and wait a few minutes for LinkedIn to propagate the updates
+### 1. Update All Platform Redirect URIs ⚠️ REQUIRED
+Update redirect URIs in all platform developer consoles:
 
-### 2. Update Other Platform Redirect URIs
-- **Instagram**: Change to `/auth/callback/instagram`
-- **Facebook**: Change to `/auth/callback/facebook`
+**LinkedIn Developer Console:**
+- Change from `/api/social-accounts/callback/linkedin` to `/auth/callback/linkedin`
+- Deprecated scope errors are now resolved with custom implementation
+
+**Facebook Developer Console:**
+- Change from `/api/social-accounts/callback/facebook` to `/auth/callback/facebook`
+- Ensure your app has these permissions: `pages_manage_posts`, `pages_read_engagement`, `pages_show_list`, `business_management`
+
+**Instagram (via Facebook Developer Console):**
+- Change from `/api/social-accounts/callback/instagram` to `/auth/callback/instagram`
+- Ensure Instagram Business API permissions are enabled
+- Your Facebook app needs access to Instagram Business accounts
 
 ### 3. Deploy and Clear Caches
 ```bash
@@ -112,6 +160,46 @@ php artisan migrate:status
 
 # Check queue status
 php artisan queue:work --once
+```
+
+## Instagram Business Account Benefits
+
+The custom Instagram OAuth service now properly handles:
+
+- **Facebook Business Manager Integration**: Automatically discovers Instagram Business accounts linked to your Facebook pages
+- **Multiple Account Support**: Can connect multiple Instagram Business accounts if you manage several
+- **Proper Token Management**: Uses Facebook page access tokens for Instagram Business API calls
+- **Business-Specific Scopes**: Includes `business_management` scope for managed account access
+
+## Testing the Error Handling Improvements
+
+You should now see meaningful error messages instead of generic ones:
+
+### Rate Limiting Error (429)
+```json
+{
+  "error": "rate_limit_exceeded",
+  "message": "Too many requests. Please wait a moment and try again.",
+  "code": 0
+}
+```
+
+### Authentication Error (401)
+```json
+{
+  "error": "authentication_required", 
+  "message": "Authentication required. Please log in.",
+  "code": 0
+}
+```
+
+### Validation Error (422)
+```json
+{
+  "error": "validation_error",
+  "message": "Validation failed: [specific validation message]",
+  "code": 0
+}
 ```
 
 ## Verification Commands

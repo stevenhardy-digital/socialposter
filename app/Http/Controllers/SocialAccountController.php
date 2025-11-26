@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\SocialAccount;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Laravel\Socialite\Facades\Socialite;
+
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Exception;
@@ -25,53 +25,7 @@ class SocialAccountController extends Controller
         ]);
     }
 
-    /**
-     * Initiate OAuth flow for a social media platform
-     */
-    public function connect(string $platform): JsonResponse
-    {
-        try {
-            $validPlatforms = ['instagram', 'facebook', 'linkedin'];
-            
-            if (!in_array($platform, $validPlatforms)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid platform specified'
-                ], 400);
-            }
 
-            // Check if session is available
-            if (!session()->isStarted()) {
-                session()->start();
-            }
-
-            // Configure platform-specific scopes
-            $scopes = $this->getScopesForPlatform($platform);
-            
-            $redirectUrl = Socialite::driver($platform)
-                ->scopes($scopes)
-                ->redirect()
-                ->getTargetUrl();
-
-            return response()->json([
-                'success' => true,
-                'redirect_url' => $redirectUrl,
-                'platform' => $platform
-            ]);
-        } catch (Exception $e) {
-            Log::error('OAuth initiation failed', [
-                'platform' => $platform,
-                'error' => $e->getMessage(),
-                'session_started' => session()->isStarted(),
-                'session_driver' => config('session.driver'),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to initiate OAuth flow: ' . $e->getMessage()
-            ], 500);
-        }
-    }
 
     /**
      * Initiate OAuth flow from web route (with session support)
@@ -92,13 +46,13 @@ class SocialAccountController extends Controller
             session(['oauth_user_id' => Auth::id()]);
             session(['oauth_platform' => $platform]);
 
-            // Configure platform-specific scopes
-            $scopes = $this->getScopesForPlatform($platform);
-            
-            $redirectUrl = Socialite::driver($platform)
-                ->scopes($scopes)
-                ->redirect()
-                ->getTargetUrl();
+            // Use custom OAuth services for all platforms
+            $redirectUrl = match ($platform) {
+                'linkedin' => app(\App\Services\LinkedInOAuthService::class)->getAuthorizationUrl(),
+                'instagram' => app(\App\Services\InstagramOAuthService::class)->getAuthorizationUrl(),
+                'facebook' => app(\App\Services\FacebookOAuthService::class)->getAuthorizationUrl(),
+                default => throw new \Exception("Unsupported platform: {$platform}")
+            };
 
             return response()->json([
                 'success' => true,
@@ -163,20 +117,25 @@ class SocialAccountController extends Controller
                 return redirect("/#/login?message=" . urlencode("User not found. Please log in and try again."));
             }
 
-            $socialiteUser = Socialite::driver($platform)->user();
+            // Use custom OAuth services for all platforms
+            $userData = match ($platform) {
+                'linkedin' => app(\App\Services\LinkedInOAuthService::class)->handleCallback($request),
+                'instagram' => app(\App\Services\InstagramOAuthService::class)->handleCallback($request),
+                'facebook' => app(\App\Services\FacebookOAuthService::class)->handleCallback($request),
+                default => throw new \Exception("Unsupported platform: {$platform}")
+            };
             
-            // Store or update social account
             $socialAccount = SocialAccount::updateOrCreate(
                 [
                     'user_id' => $user->id,
                     'platform' => $platform,
-                    'platform_user_id' => $socialiteUser->getId()
+                    'platform_user_id' => $userData['id']
                 ],
                 [
-                    'access_token' => $socialiteUser->token,
-                    'refresh_token' => $socialiteUser->refreshToken,
-                    'expires_at' => $socialiteUser->expiresIn ? now()->addSeconds($socialiteUser->expiresIn) : null,
-                    'account_name' => $socialiteUser->getName() ?? $socialiteUser->getNickname()
+                    'access_token' => $userData['access_token'],
+                    'refresh_token' => $userData['refresh_token'],
+                    'expires_at' => $userData['expires_in'] ? now()->addSeconds($userData['expires_in']) : null,
+                    'account_name' => $userData['name']
                 ]
             );
 
@@ -202,66 +161,7 @@ class SocialAccountController extends Controller
         }
     }
 
-    /**
-     * Handle OAuth callback and store tokens (API version)
-     */
-    public function callback(string $platform, Request $request): JsonResponse
-    {
-        try {
-            // Check for OAuth errors
-            if ($request->has('error')) {
-                Log::error('OAuth callback error', [
-                    'platform' => $platform,
-                    'error' => $request->get('error'),
-                    'error_description' => $request->get('error_description'),
-                    'state' => $request->get('state'),
-                ]);
 
-                // Return JSON response instead of redirecting to avoid route issues
-                return response()->json([
-                    'success' => false,
-                    'message' => 'OAuth authorization failed: ' . $request->get('error_description', $request->get('error')),
-                    'error_code' => $request->get('error'),
-                    'platform' => $platform,
-                    'redirect_to_frontend' => true
-                ], 400);
-            }
-
-            $socialiteUser = Socialite::driver($platform)->user();
-            
-            // Store or update social account
-            $socialAccount = SocialAccount::updateOrCreate(
-                [
-                    'user_id' => Auth::id(),
-                    'platform' => $platform,
-                    'platform_user_id' => $socialiteUser->getId()
-                ],
-                [
-                    'access_token' => $socialiteUser->token,
-                    'refresh_token' => $socialiteUser->refreshToken,
-                    'expires_at' => $socialiteUser->expiresIn ? now()->addSeconds($socialiteUser->expiresIn) : null,
-                    'account_name' => $socialiteUser->getName() ?? $socialiteUser->getNickname()
-                ]
-            );
-
-            return response()->json([
-                'success' => true,
-                'message' => ucfirst($platform) . ' account connected successfully',
-                'account' => $socialAccount->makeHidden(['access_token', 'refresh_token'])
-            ]);
-        } catch (Exception $e) {
-            Log::error('OAuth callback failed', [
-                'platform' => $platform,
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to connect ' . ucfirst($platform) . ' account',
-                'platform' => $platform
-            ], 500);
-        }
-    }
 
     /**
      * Disconnect a social media account
@@ -319,15 +219,18 @@ class SocialAccountController extends Controller
                 ], 403);
             }
 
-            // Attempt to refresh the token
-            $refreshedUser = Socialite::driver($socialAccount->platform)
-                ->refreshToken($socialAccount->refresh_token);
-
-            // Update the stored tokens
+            // Use custom OAuth services for all platforms
+            $tokenData = match ($socialAccount->platform) {
+                'linkedin' => app(\App\Services\LinkedInOAuthService::class)->refreshToken($socialAccount->refresh_token ?? $socialAccount->access_token),
+                'instagram' => app(\App\Services\InstagramOAuthService::class)->refreshToken($socialAccount->access_token),
+                'facebook' => app(\App\Services\FacebookOAuthService::class)->refreshToken($socialAccount->access_token),
+                default => throw new \Exception("Unsupported platform: {$socialAccount->platform}")
+            };
+            
             $socialAccount->update([
-                'access_token' => $refreshedUser->token,
-                'refresh_token' => $refreshedUser->refreshToken ?? $socialAccount->refresh_token,
-                'expires_at' => $refreshedUser->expiresIn ? now()->addSeconds($refreshedUser->expiresIn) : null
+                'access_token' => $tokenData['access_token'],
+                'refresh_token' => $tokenData['refresh_token'],
+                'expires_at' => $tokenData['expires_in'] ? now()->addSeconds($tokenData['expires_in']) : null
             ]);
 
             return response()->json([
@@ -348,18 +251,7 @@ class SocialAccountController extends Controller
         }
     }
 
-    /**
-     * Get platform-specific OAuth scopes
-     */
-    private function getScopesForPlatform(string $platform): array
-    {
-        return match($platform) {
-            'instagram' => ['instagram_basic', 'instagram_content_publish'],
-            'facebook' => ['pages_manage_posts', 'pages_read_engagement'],
-            'linkedin' => ['r_liteprofile', 'w_member_social'],
-            default => []
-        };
-    }
+
 
     /**
      * Subscribe to webhooks for a social account
