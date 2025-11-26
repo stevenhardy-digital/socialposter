@@ -148,11 +148,13 @@ class LinkedInOAuthService
         $tokenData = $tokenResponse->json();
         $accessToken = $tokenData['access_token'];
 
-        // Get user profile information using current LinkedIn v2 API
+        // Get user profile information using LinkedIn v2 basic profile API
         $profileResponse = Http::withHeaders([
             'Authorization' => "Bearer {$accessToken}",
             'X-Restli-Protocol-Version' => '2.0.0'
-        ])->get('https://api.linkedin.com/v2/userinfo');
+        ])->get('https://api.linkedin.com/v2/people/~', [
+            'projection' => '(id,localizedFirstName,localizedLastName)'
+        ]);
 
         if (!$profileResponse->successful()) {
             Log::error('LinkedIn profile fetch failed', [
@@ -170,9 +172,13 @@ class LinkedInOAuthService
             'profile_data' => $profileData,
         ]);
 
+        // Parse LinkedIn v2 people response
+        $userId = $profileData['id'];
+        $name = trim(($profileData['localizedFirstName'] ?? '') . ' ' . ($profileData['localizedLastName'] ?? '')) ?: 'LinkedIn User';
+
         return [
-            'id' => $profileData['sub'], // LinkedIn userinfo uses 'sub' for user ID
-            'name' => $profileData['name'] ?? ($profileData['given_name'] . ' ' . $profileData['family_name']),
+            'id' => $userId,
+            'name' => $name,
             'access_token' => $accessToken,
             'refresh_token' => $tokenData['refresh_token'] ?? null,
             'expires_in' => $tokenData['expires_in'] ?? 5184000, // 60 days default

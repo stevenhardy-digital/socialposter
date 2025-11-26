@@ -143,8 +143,18 @@ class SocialAccountController extends Controller
 
                 $stateData = \App\Models\OAuthState::consumeState($state);
                 if (!$stateData) {
+                    Log::error('OAuth state not found in database', [
+                        'platform' => $platform,
+                        'state' => $state,
+                        'state_length' => strlen($state),
+                    ]);
                     return redirect("/#/oauth-callback?oauth_error={$platform}&message=" . urlencode("OAuth state expired or invalid"));
                 }
+
+                Log::info('OAuth state retrieved successfully', [
+                    'platform' => $platform,
+                    'user_id' => $stateData['user_id'],
+                ]);
 
                 $userId = $stateData['user_id'];
                 $authToken = $stateData['auth_token'];
