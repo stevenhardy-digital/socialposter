@@ -148,6 +148,12 @@ class LinkedInOAuthService
         $profileInfo = $this->tryGetProfileInfo($accessToken);
         $companyPages = $this->tryGetCompanyPages($accessToken);
 
+        Log::info('LinkedIn OAuth complete with additional data', [
+            'profile_info' => $profileInfo,
+            'company_pages' => $companyPages,
+            'access_token_preview' => substr($accessToken, 0, 20) . '...'
+        ]);
+
         return [
             'id' => $profileInfo['id'] ?? $userId,
             'name' => $profileInfo['name'] ?? $name,
@@ -171,11 +177,23 @@ class LinkedInOAuthService
 
         // Try different LinkedIn API endpoints to get profile info
         $endpoints = [
-            // Basic profile with minimal fields
+            // Most basic - just ID
             [
                 'url' => 'https://api.linkedin.com/v2/people/~',
                 'params' => ['projection' => '(id)'],
-                'name' => 'basic_profile'
+                'name' => 'basic_id_only'
+            ],
+            // Try with localized names
+            [
+                'url' => 'https://api.linkedin.com/v2/people/~',
+                'params' => ['projection' => '(id,localizedFirstName,localizedLastName)'],
+                'name' => 'localized_names'
+            ],
+            // Try with firstName/lastName structure
+            [
+                'url' => 'https://api.linkedin.com/v2/people/~',
+                'params' => ['projection' => '(id,firstName,lastName)'],
+                'name' => 'structured_names'
             ],
             // Try userinfo endpoint (OpenID Connect)
             [
@@ -183,11 +201,17 @@ class LinkedInOAuthService
                 'params' => [],
                 'name' => 'userinfo'
             ],
-            // Try profile with different projection
+            // Try with headline and profile picture
             [
                 'url' => 'https://api.linkedin.com/v2/people/~',
-                'params' => ['projection' => '(id,localizedFirstName,localizedLastName)'],
-                'name' => 'localized_profile'
+                'params' => ['projection' => '(id,localizedFirstName,localizedLastName,headline)'],
+                'name' => 'with_headline'
+            ],
+            // Try the lite profile endpoint
+            [
+                'url' => 'https://api.linkedin.com/v2/people/~',
+                'params' => ['projection' => '(id,localizedFirstName,localizedLastName,profilePicture)'],
+                'name' => 'with_picture'
             ]
         ];
 
@@ -332,11 +356,19 @@ class LinkedInOAuthService
      */
     public function getAccountDetails(string $accessToken): array
     {
+        Log::info('Getting LinkedIn account details', [
+            'access_token_preview' => substr($accessToken, 0, 20) . '...'
+        ]);
+
         $details = [
             'profile' => $this->tryGetProfileInfo($accessToken),
             'company_pages' => $this->tryGetCompanyPages($accessToken),
             'permissions' => $this->getTokenPermissions($accessToken),
         ];
+
+        Log::info('LinkedIn account details retrieved', [
+            'details' => $details
+        ]);
 
         return $details;
     }
