@@ -10,6 +10,8 @@ Route::withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken
     
     // Callback route doesn't need auth middleware (user info stored in OAuth state)
     Route::get('/auth/callback/{platform}', [SocialAccountController::class, 'webCallback'])->name('oauth.callback');
+    
+
 });
 
 // Serve the SPA for all routes (Vue Router will handle routing)

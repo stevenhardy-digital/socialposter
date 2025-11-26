@@ -113,18 +113,20 @@
 3. Users get redirected to login before OAuth processing can complete
 
 **The Solution**: 
-1. **Connect Route**: Stores user's auth token in session before redirecting to OAuth
-2. **Callback Route**: No authentication required (it's an external redirect)
-3. **OAuth Callback Component**: New unprotected route `/oauth-callback` that handles OAuth responses
-4. **Token Restoration**: Restores authentication state and redirects to protected routes
-5. **Frontend Handling**: Shows success/error messages and refreshes account data
+1. **Connect Route**: Stores user's auth token in OAuth state parameter (not session)
+2. **State-Based Auth**: User data encoded in OAuth state to survive redirects
+3. **Callback Route**: No authentication required (it's an external redirect)
+4. **OAuth Callback Component**: New unprotected route `/oauth-callback` that handles OAuth responses
+5. **Token Restoration**: Restores authentication state from OAuth state and redirects to protected routes
+6. **Frontend Handling**: Shows success/error messages and refreshes account data
 
 **New OAuth Flow**:
-1. User clicks "Connect" → `/auth/connect/{platform}` (stores token in session)
-2. Redirects to OAuth provider (LinkedIn, etc.)
-3. Provider redirects back → `/oauth-callback` (unprotected route)
-4. OAuth component restores authentication and redirects to `/accounts`
-5. User sees success message and updated account list
+1. User clicks "Connect" → `/auth/connect/{platform}` (encodes user data in OAuth state)
+2. Redirects to OAuth provider with state containing user ID and auth token
+3. Provider redirects back → `/auth/callback/{platform}` (backend processes OAuth)
+4. Backend redirects to → `/#/oauth-callback` (unprotected frontend route)
+5. OAuth component restores authentication and redirects to `/accounts`
+6. User sees success message and updated account list
 
 **User Experience**: Seamless OAuth flow with no login interruptions.
 

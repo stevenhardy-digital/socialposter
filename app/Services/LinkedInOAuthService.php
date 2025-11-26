@@ -44,9 +44,19 @@ class LinkedInOAuthService
     /**
      * Generate OAuth authorization URL
      */
-    public function getAuthorizationUrl(): string
+    public function getAuthorizationUrl(array $userData = []): string
     {
-        $state = Str::random(40);
+        // Create state with user data encoded
+        $stateData = [
+            'random' => Str::random(20),
+            'user_id' => $userData['user_id'] ?? null,
+            'auth_token' => $userData['auth_token'] ?? null,
+            'timestamp' => time(),
+        ];
+        
+        $state = base64_encode(json_encode($stateData));
+        
+        // Still store in session as backup
         session(['linkedin_oauth_state' => $state]);
 
         $params = [
@@ -65,12 +75,24 @@ class LinkedInOAuthService
      */
     public function handleCallback(Request $request): array
     {
-        // Verify state parameter
+        // Verify and decode state parameter
         $state = $request->get('state');
-        $sessionState = session('linkedin_oauth_state');
-        
-        if (!$state || $state !== $sessionState) {
-            throw new \Exception('Invalid OAuth state parameter');
+        if (!$state) {
+            throw new \Exception('OAuth state parameter missing');
+        }
+
+        try {
+            $stateData = json_decode(base64_decode($state), true);
+            if (!$stateData || !isset($stateData['timestamp'])) {
+                throw new \Exception('Invalid OAuth state format');
+            }
+
+            // Check if state is not too old (10 minutes max)
+            if (time() - $stateData['timestamp'] > 600) {
+                throw new \Exception('OAuth state expired');
+            }
+        } catch (\Exception $e) {
+            throw new \Exception('Invalid OAuth state parameter: ' . $e->getMessage());
         }
 
         // Clear the state from session
@@ -129,6 +151,7 @@ class LinkedInOAuthService
             'access_token' => $accessToken,
             'refresh_token' => $tokenData['refresh_token'] ?? null,
             'expires_in' => $tokenData['expires_in'] ?? 5184000, // 60 days default
+            'state_data' => $stateData, // Include the decoded state data
         ];
     }
 

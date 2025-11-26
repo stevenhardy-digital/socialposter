@@ -68,7 +68,10 @@ class SocialAccountController extends Controller
 
             // Use custom OAuth services for all platforms
             $redirectUrl = match ($platform) {
-                'linkedin' => app(\App\Services\LinkedInOAuthService::class)->getAuthorizationUrl(),
+                'linkedin' => app(\App\Services\LinkedInOAuthService::class)->getAuthorizationUrl([
+                    'user_id' => $user->id,
+                    'auth_token' => $authToken
+                ]),
                 'instagram' => app(\App\Services\InstagramOAuthService::class)->getAuthorizationUrl(),
                 'facebook' => app(\App\Services\FacebookOAuthService::class)->getAuthorizationUrl(),
                 default => throw new \Exception("Unsupported platform: {$platform}")
@@ -100,6 +103,18 @@ class SocialAccountController extends Controller
      */
     public function webCallback(string $platform, Request $request)
     {
+        // Add comprehensive logging for debugging
+        Log::info('OAuth callback received', [
+            'platform' => $platform,
+            'request_params' => $request->all(),
+            'session_id' => session()->getId(),
+            'session_data' => [
+                'oauth_user_id' => session('oauth_user_id'),
+                'oauth_platform' => session('oauth_platform'),
+                'oauth_auth_token' => session('oauth_auth_token') ? 'present' : 'missing',
+            ],
+        ]);
+
         try {
             // Check for OAuth errors
             if ($request->has('error')) {
@@ -111,26 +126,46 @@ class SocialAccountController extends Controller
                 ]);
 
                 // Clean up session data
-                session()->forget(['oauth_user_id', 'oauth_platform']);
+                session()->forget(['oauth_user_id', 'oauth_platform', 'oauth_auth_token']);
 
                 // Redirect to OAuth callback handler with error
                 $errorMessage = urlencode($request->get('error_description', $request->get('error')));
                 return redirect("/#/oauth-callback?oauth_error={$platform}&message={$errorMessage}");
             }
 
-            // Get user ID and auth token from session (stored during OAuth initiation)
-            $userId = session('oauth_user_id');
-            $sessionPlatform = session('oauth_platform');
-            $authToken = session('oauth_auth_token');
+            // For LinkedIn, get user data from state parameter; for others, use session
+            if ($platform === 'linkedin') {
+                $state = $request->get('state');
+                if (!$state) {
+                    return redirect("/#/oauth-callback?oauth_error={$platform}&message=" . urlencode("OAuth state missing"));
+                }
+
+                try {
+                    $stateData = json_decode(base64_decode($state), true);
+                    $userId = $stateData['user_id'] ?? null;
+                    $authToken = $stateData['auth_token'] ?? null;
+                } catch (\Exception $e) {
+                    return redirect("/#/oauth-callback?oauth_error={$platform}&message=" . urlencode("Invalid OAuth state"));
+                }
+            } else {
+                // Get user ID and auth token from session for other platforms
+                $userId = session('oauth_user_id');
+                $sessionPlatform = session('oauth_platform');
+                $authToken = session('oauth_auth_token');
+                
+                if (!$userId || $sessionPlatform !== $platform) {
+                    Log::warning('OAuth callback without valid session', [
+                        'platform' => $platform,
+                        'session_platform' => $sessionPlatform,
+                        'user_id' => $userId,
+                        'session_id' => session()->getId(),
+                    ]);
+                    return redirect("/#/oauth-callback?oauth_error={$platform}&message=" . urlencode("OAuth session expired. Please try connecting your account again."));
+                }
+            }
             
-            if (!$userId || $sessionPlatform !== $platform) {
-                Log::warning('OAuth callback without valid session', [
-                    'platform' => $platform,
-                    'session_platform' => $sessionPlatform,
-                    'user_id' => $userId,
-                    'session_id' => session()->getId(),
-                ]);
-                return redirect("/#/oauth-callback?oauth_error={$platform}&message=" . urlencode("OAuth session expired. Please try connecting your account again."));
+            if (!$userId) {
+                return redirect("/#/oauth-callback?oauth_error={$platform}&message=" . urlencode("User ID missing from OAuth state"));
             }
 
             $user = \App\Models\User::find($userId);
@@ -145,6 +180,11 @@ class SocialAccountController extends Controller
                 'facebook' => app(\App\Services\FacebookOAuthService::class)->handleCallback($request),
                 default => throw new \Exception("Unsupported platform: {$platform}")
             };
+
+            // For LinkedIn, get auth token from state data
+            if ($platform === 'linkedin' && isset($userData['state_data']['auth_token'])) {
+                $authToken = $userData['state_data']['auth_token'];
+            }
             
             $socialAccount = SocialAccount::updateOrCreate(
                 [
