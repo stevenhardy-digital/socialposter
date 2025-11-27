@@ -22,7 +22,7 @@ class PostController extends Controller
     /**
      * Display a listing of posts
      */
-    public function index(Request $request): JsonResponse
+    public function index(Request $request)
     {
         $query = Post::with(['socialAccount', 'engagementMetrics'])
             ->whereHas('socialAccount', function ($query) {
@@ -62,13 +62,13 @@ class PostController extends Controller
         $posts = $query->orderBy('scheduled_at', 'desc')
             ->paginate($request->get('per_page', 15));
 
-        return \App\Http\Resources\PostResource::collection($posts);
+        return PostResource::collection($posts);
     }
 
     /**
      * Store a newly created post
      */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request)
     {
         $request->validate([
             'social_account_id' => 'required|exists:social_accounts,id',
@@ -99,7 +99,7 @@ class PostController extends Controller
     /**
      * Display the specified post
      */
-    public function show(Post $post): JsonResponse
+    public function show(Post $post)
     {
         // Ensure the post belongs to the authenticated user
         if ($post->socialAccount->user_id !== Auth::id()) {
@@ -112,7 +112,7 @@ class PostController extends Controller
     /**
      * Update the specified post
      */
-    public function update(Request $request, Post $post): JsonResponse
+    public function update(Request $request, Post $post)
     {
         // Ensure the post belongs to the authenticated user
         if ($post->socialAccount->user_id !== Auth::id()) {
@@ -162,7 +162,7 @@ class PostController extends Controller
     /**
      * Approve a draft post
      */
-    public function approve(Post $post): JsonResponse
+    public function approve(Post $post)
     {
         // Ensure the post belongs to the authenticated user
         if ($post->socialAccount->user_id !== Auth::id()) {
@@ -181,7 +181,7 @@ class PostController extends Controller
     /**
      * Reject a draft post
      */
-    public function reject(Post $post): JsonResponse
+    public function reject(Post $post)
     {
         // Ensure the post belongs to the authenticated user
         if ($post->socialAccount->user_id !== Auth::id()) {
@@ -200,7 +200,7 @@ class PostController extends Controller
     /**
      * Get posts by status (for draft approval workflow)
      */
-    public function getByStatus(string $status): JsonResponse
+    public function getByStatus(string $status)
     {
         $posts = Post::with(['socialAccount', 'engagementMetrics'])
             ->whereHas('socialAccount', function ($query) {
@@ -241,13 +241,18 @@ class PostController extends Controller
                 return $post->scheduled_at->format('Y-m-d');
             });
 
-        return response()->json($posts);
+        // Transform each group to use PostResource
+        $transformedPosts = $posts->map(function ($dayPosts) {
+            return PostResource::collection($dayPosts);
+        });
+
+        return response()->json($transformedPosts);
     }
 
     /**
      * Update post scheduled date (for drag-and-drop functionality)
      */
-    public function updateSchedule(Request $request, Post $post): JsonResponse
+    public function updateSchedule(Request $request, Post $post)
     {
         // Ensure the post belongs to the authenticated user
         if ($post->socialAccount->user_id !== Auth::id()) {
@@ -300,14 +305,14 @@ class PostController extends Controller
 
         if ($publishResult['success']) {
             return response()->json([
-                'post' => $post->fresh()->load(['socialAccount', 'engagementMetrics']),
+                'post' => new PostResource($post->fresh()->load(['socialAccount', 'engagementMetrics'])),
                 'message' => 'Post created and published successfully',
                 'platform_post_id' => $publishResult['platform_post_id']
             ], 201);
         } else {
             // Return post with publishing error or manual instructions
             return response()->json([
-                'post' => $post->fresh()->load(['socialAccount', 'engagementMetrics']),
+                'post' => new PostResource($post->fresh()->load(['socialAccount', 'engagementMetrics'])),
                 'error' => $publishResult['error'] ?? null,
                 'requires_manual_posting' => $publishResult['requires_manual_posting'] ?? false,
                 'instructions' => $publishResult['instructions'] ?? null,
@@ -337,13 +342,13 @@ class PostController extends Controller
 
         if ($publishResult['success']) {
             return response()->json([
-                'post' => $post->fresh()->load(['socialAccount', 'engagementMetrics']),
+                'post' => new PostResource($post->fresh()->load(['socialAccount', 'engagementMetrics'])),
                 'message' => 'Post published successfully',
                 'platform_post_id' => $publishResult['platform_post_id']
             ]);
         } else {
             return response()->json([
-                'post' => $post->fresh()->load(['socialAccount', 'engagementMetrics']),
+                'post' => new PostResource($post->fresh()->load(['socialAccount', 'engagementMetrics'])),
                 'error' => $publishResult['error'] ?? null,
                 'requires_manual_posting' => $publishResult['requires_manual_posting'] ?? false,
                 'instructions' => $publishResult['instructions'] ?? null,
