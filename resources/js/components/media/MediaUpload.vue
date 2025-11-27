@@ -126,14 +126,14 @@
         </div>
       </div>
 
-      <!-- Upload Button -->
+      <!-- Finalize Button -->
       <div class="flex justify-end">
         <button
-          @click="uploadImages"
-          :disabled="uploading"
+          @click="finalizeCrops"
+          :disabled="uploading || selectedImages.length === 0"
           class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
         >
-          {{ uploading ? 'Uploading...' : 'Upload & Process Images' }}
+          {{ uploading ? 'Processing...' : 'Finalize Crops' }}
         </button>
       </div>
     </div>
@@ -243,40 +243,66 @@ export default {
           continue
         }
 
-        const preview = URL.createObjectURL(file)
-        const img = new Image()
-        
-        img.onload = () => {
+        // Upload immediately to get server URL for preview (CSP-safe)
+        try {
+          uploading.value = true
+          const formData = new FormData()
+          formData.append('images[0]', file)
+          formData.append('crops[0]', JSON.stringify({
+            platforms: selectedPlatforms.value,
+            crops: {} // Will be updated when user adjusts crops
+          }))
+
+          const response = await axios.post('/api/media/upload', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data'
+            }
+          })
+
+          const uploadedMedia = response.data.media[0]
+          
+          // Create image data with server URL
           const imageData = {
+            id: uploadedMedia.id,
             file,
-            preview,
-            width: img.width,
-            height: img.height,
+            preview: uploadedMedia.original_url,
+            width: uploadedMedia.width,
+            height: uploadedMedia.height,
             cropSettings: {
               x: 0,
               y: 0
             },
             maxX: 0,
             maxY: 0,
-            crops: {}
+            crops: {},
+            uploaded: true
           }
 
           // Calculate max crop positions
           const minRatio = Math.min(...selectedPlatforms.value.map(p => platformSpecs[p].ratio))
-          const cropWidth = Math.min(img.width, img.height * minRatio)
-          const cropHeight = Math.min(img.height, img.width / minRatio)
+          const cropWidth = Math.min(uploadedMedia.width, uploadedMedia.height * minRatio)
+          const cropHeight = Math.min(uploadedMedia.height, uploadedMedia.width / minRatio)
           
-          imageData.maxX = Math.max(0, img.width - cropWidth)
-          imageData.maxY = Math.max(0, img.height - cropHeight)
+          imageData.maxX = Math.max(0, uploadedMedia.width - cropWidth)
+          imageData.maxY = Math.max(0, uploadedMedia.height - cropHeight)
 
           selectedImages.value.push(imageData)
+          
+          // Add to uploaded media list
+          if (!uploadedMedia.value.find(m => m.id === uploadedMedia.id)) {
+            uploadedMedia.value.push(uploadedMedia)
+          }
           
           nextTick(() => {
             updateCrops(selectedImages.value.length - 1)
           })
+
+        } catch (error) {
+          console.error('Upload failed:', error)
+          alert(`Failed to upload ${file.name}. Please try again.`)
+        } finally {
+          uploading.value = false
         }
-        
-        img.src = preview
       }
     }
 
@@ -322,6 +348,8 @@ export default {
             0, 0, canvas.width, canvas.height
           )
         }
+        // Use crossOrigin to handle CORS for server images
+        img.crossOrigin = 'anonymous'
         img.src = image.preview
 
         // Store crop data
@@ -332,49 +360,39 @@ export default {
           height: cropHeight
         }
       })
+
+      // Update crops on server if image is already uploaded
+      if (image.uploaded) {
+        updateImageCrops(imageIndex)
+      }
     }
 
     const removeImage = (index) => {
-      const image = selectedImages.value[index]
-      URL.revokeObjectURL(image.preview)
       selectedImages.value.splice(index, 1)
     }
 
-    const uploadImages = async () => {
-      uploading.value = true
+    const updateImageCrops = async (imageIndex) => {
+      const image = selectedImages.value[imageIndex]
+      if (!image || !image.uploaded) return
 
       try {
-        const formData = new FormData()
-        
-        selectedImages.value.forEach((image, index) => {
-          formData.append(`images[${index}]`, image.file)
-          formData.append(`crops[${index}]`, JSON.stringify({
-            platforms: selectedPlatforms.value,
-            crops: image.crops
-          }))
+        // Update crops on server
+        await axios.put(`/api/media/${image.id}/crops`, {
+          platforms: selectedPlatforms.value,
+          crops: image.crops
         })
-
-        const response = await axios.post('/api/media/upload', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        })
-
-        uploadedMedia.value.push(...response.data.media)
-        
-        // Clear selected images
-        selectedImages.value.forEach(image => {
-          URL.revokeObjectURL(image.preview)
-        })
-        selectedImages.value = []
-
-        emit('media-uploaded', response.data.media)
       } catch (error) {
-        console.error('Upload failed:', error)
-        alert('Failed to upload images. Please try again.')
-      } finally {
-        uploading.value = false
+        console.error('Failed to update crops:', error)
       }
+    }
+
+    const finalizeCrops = async () => {
+      // Emit the uploaded media with final crops
+      const finalizedMedia = selectedImages.value.filter(img => img.uploaded)
+      emit('media-uploaded', finalizedMedia)
+      
+      // Clear selected images
+      selectedImages.value = []
     }
 
     const selectMedia = (media) => {
@@ -417,7 +435,7 @@ export default {
       handleFileSelect,
       updateCrops,
       removeImage,
-      uploadImages,
+      finalizeCrops,
       selectMedia,
       deleteMedia
     }

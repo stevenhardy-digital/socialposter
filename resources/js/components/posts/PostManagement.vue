@@ -240,7 +240,7 @@
                 <!-- Media Upload -->
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-2">Media (Optional)</label>
-                  <MediaUpload
+                  <SimpleMediaUpload
                     :platforms="getSelectedPlatforms()"
                     @media-selected="addSelectedMedia"
                     @media-uploaded="onMediaUploaded"
@@ -339,12 +339,12 @@
 <script>
 import { ref, reactive, onMounted, computed } from 'vue'
 import axios from 'axios'
-import MediaUpload from '../media/MediaUpload.vue'
+import SimpleMediaUpload from '../media/SimpleMediaUpload.vue'
 
 export default {
   name: 'PostManagement',
   components: {
-    MediaUpload
+    SimpleMediaUpload
   },
   setup() {
     const posts = ref([])

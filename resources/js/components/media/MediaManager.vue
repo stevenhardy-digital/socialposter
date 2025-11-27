@@ -8,7 +8,7 @@
     </div>
 
     <div class="bg-white shadow rounded-lg p-6">
-      <MediaUpload
+      <SimpleMediaUpload
         :platforms="['instagram', 'facebook', 'linkedin', 'twitter']"
         @media-selected="onMediaSelected"
         @media-uploaded="onMediaUploaded"
@@ -24,12 +24,12 @@
 
 <script>
 import { ref, computed } from 'vue'
-import MediaUpload from './MediaUpload.vue'
+import SimpleMediaUpload from './SimpleMediaUpload.vue'
 
 export default {
   name: 'MediaManager',
   components: {
-    MediaUpload
+    SimpleMediaUpload
   },
   setup() {
     const message = ref('')

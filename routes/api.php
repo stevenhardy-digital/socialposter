@@ -87,6 +87,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::get('/', [\App\Http\Controllers\MediaController::class, 'index']);
         Route::post('upload', [\App\Http\Controllers\MediaController::class, 'upload']);
         Route::get('{media}', [\App\Http\Controllers\MediaController::class, 'show']);
+        Route::put('{media}/crops', [\App\Http\Controllers\MediaController::class, 'updateCrops']);
         Route::delete('{media}', [\App\Http\Controllers\MediaController::class, 'destroy']);
     });
 

@@ -155,7 +155,7 @@
                 <!-- Media Upload -->
                 <div v-if="selectedPost?.status !== 'published'">
                   <label class="block text-sm font-medium text-gray-700 mb-2">Media</label>
-                  <MediaUpload
+                  <SimpleMediaUpload
                     :platforms="getSelectedPlatforms()"
                     @media-selected="addSelectedMedia"
                     @media-uploaded="onMediaUploaded"
@@ -267,12 +267,12 @@
 <script>
 import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
-import MediaUpload from '../media/MediaUpload.vue';
+import SimpleMediaUpload from '../media/SimpleMediaUpload.vue';
 
 export default {
   name: 'Calendar',
   components: {
-    MediaUpload
+    SimpleMediaUpload
   },
   setup() {
     const currentDate = ref(new Date());

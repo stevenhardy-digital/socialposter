@@ -60,6 +60,11 @@ class MediaController extends Controller
                 'height' => null, // Will be set after processing
             ]);
 
+            // If no specific crops provided, generate default crops for all platforms
+            if (empty($cropData['crops'])) {
+                $cropData['crops'] = $this->generateDefaultCrops($media, $file, $cropData['platforms']);
+            }
+
             // Process image and create crops
             $this->processImageCrops($media, $file, $cropData);
             
@@ -115,7 +120,15 @@ class MediaController extends Controller
     private function processImageCrops(Media $media, $file, array $cropData): void
     {
         $manager = new ImageManager(new Driver());
-        $image = $manager->read($file);
+        
+        // Handle both file uploads and existing file paths
+        if (is_string($file)) {
+            // File path - read from storage
+            $image = $manager->read(Storage::disk('public')->path($file));
+        } else {
+            // File upload
+            $image = $manager->read($file);
+        }
         $originalWidth = $image->width();
         $originalHeight = $image->height();
 
@@ -190,6 +203,67 @@ class MediaController extends Controller
     }
 
     /**
+     * Generate default crops for platforms
+     */
+    private function generateDefaultCrops(Media $media, $file, array $platforms): array
+    {
+        $manager = new ImageManager(new Driver());
+        $image = $manager->read($file);
+        $imageWidth = $image->width();
+        $imageHeight = $image->height();
+        
+        $crops = [];
+        
+        foreach ($platforms as $platform) {
+            $ratio = $this->getPlatformRatio($platform);
+            if (!$ratio) continue;
+            
+            // Calculate crop dimensions for center crop
+            $sourceRatio = $imageWidth / $imageHeight;
+            
+            if ($sourceRatio > $ratio) {
+                // Image is wider than target ratio - crop width
+                $cropHeight = $imageHeight;
+                $cropWidth = $cropHeight * $ratio;
+                $cropX = ($imageWidth - $cropWidth) / 2;
+                $cropY = 0;
+            } else {
+                // Image is taller than target ratio - crop height
+                $cropWidth = $imageWidth;
+                $cropHeight = $cropWidth / $ratio;
+                $cropX = 0;
+                $cropY = ($imageHeight - $cropHeight) / 2;
+            }
+            
+            $crops[$platform] = [
+                'x' => (int) $cropX,
+                'y' => (int) $cropY,
+                'width' => (int) $cropWidth,
+                'height' => (int) $cropHeight
+            ];
+        }
+        
+        return $crops;
+    }
+
+    /**
+     * Get platform aspect ratio
+     */
+    private function getPlatformRatio(string $platform): ?float
+    {
+        $ratios = [
+            'instagram' => 1.0,
+            'facebook' => 1.91,
+            'linkedin' => 1.91,
+            'twitter' => 1.91,
+            'instagram-story' => 0.5625,
+            'facebook-story' => 0.5625,
+        ];
+
+        return $ratios[$platform] ?? null;
+    }
+
+    /**
      * Get optimal dimensions for each platform
      */
     private function getPlatformDimensions(string $platform): ?array
@@ -204,6 +278,35 @@ class MediaController extends Controller
         ];
 
         return $dimensions[$platform] ?? null;
+    }
+
+    /**
+     * Update crops for existing media
+     */
+    public function updateCrops(Request $request, Media $media): JsonResponse
+    {
+        // Check ownership
+        if ($media->user_id !== auth()->id()) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'platforms' => 'required|array',
+            'crops' => 'required|array'
+        ]);
+
+        $cropData = [
+            'platforms' => $request->platforms,
+            'crops' => $request->crops
+        ];
+
+        // Re-process crops with new settings
+        $this->processImageCrops($media, $media->original_path, $cropData);
+
+        return response()->json([
+            'message' => 'Crops updated successfully',
+            'media' => $media->fresh()
+        ]);
     }
 
     /**
