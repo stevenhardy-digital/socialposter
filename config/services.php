@@ -59,4 +59,8 @@ return [
         'webhook_verify_token' => env('LINKEDIN_WEBHOOK_VERIFY_TOKEN'),
     ],
 
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+    ],
+
 ];

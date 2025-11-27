@@ -38,26 +38,10 @@ class LinkedInOAuthService
             'redirect_uri' => $this->redirectUri,
             'app_url' => config('app.url'),
         ]);
-        // LinkedIn scopes - requesting all available permissions for maximum functionality
-        // Note: Some scopes require specific LinkedIn Products to be enabled in Developer Portal
+        // LinkedIn scopes - using only basic working scopes to avoid permission errors
         $this->scopes = [
-            // Profile and Member Data
             'r_basicprofile',                    // Basic profile (name, photo, headline, public profile URL)
-            'r_member_profileAnalytics',         // Profile analytics (viewers, followers, search appearances)
-            'r_1st_connections_size',            // Number of 1st-degree connections
-            
-            // Member Social Actions
             'w_member_social',                   // Create, modify, delete posts, comments, reactions
-            'w_member_social_feed',              // Create, modify, delete comments and reactions on posts
-            'r_member_postAnalytics',            // Retrieve posts and their reporting data
-            
-            // Organization Management
-            'rw_organization_admin',             // Manage organization pages and retrieve reporting data
-            'r_organization_social',             // Retrieve organization posts, comments, reactions, engagement data
-            'w_organization_social',             // Create, modify, delete posts, comments, reactions for organization
-            'r_organization_social_feed',        // Retrieve comments, reactions, engagement data on organization posts
-            'w_organization_social_feed',        // Create, modify, delete comments and reactions on organization posts
-            'r_organization_followers',          // Use followers' data for organization mentions
         ];
     }
 

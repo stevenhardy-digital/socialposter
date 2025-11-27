@@ -6,7 +6,7 @@ use App\Models\BrandGuideline;
 use App\Models\Post;
 use App\Models\SocialAccount;
 use Illuminate\Support\Facades\Log;
-use OpenAI\Laravel\Facades\OpenAI;
+use OpenAI;
 
 class ContentGenerationService
 {
@@ -77,7 +77,8 @@ class ContentGenerationService
         $prompt = $this->buildPrompt($account, $guidelines);
         
         try {
-            $response = OpenAI::chat()->create([
+            $client = OpenAI::client(config('services.openai.api_key'));
+            $response = $client->chat()->create([
                 'model' => 'gpt-3.5-turbo',
                 'messages' => [
                     ['role' => 'system', 'content' => 'You are a social media content creator. Generate engaging posts that follow the provided brand guidelines.'],
@@ -180,7 +181,8 @@ class ContentGenerationService
     public function testConnection(): bool
     {
         try {
-            $response = OpenAI::chat()->create([
+            $client = OpenAI::client(config('services.openai.api_key'));
+            $response = $client->chat()->create([
                 'model' => 'gpt-3.5-turbo',
                 'messages' => [
                     ['role' => 'user', 'content' => 'Test connection']

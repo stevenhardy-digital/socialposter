@@ -29,22 +29,22 @@ class PostController extends Controller
             });
 
         // Filter by platform
-        if ($request->has('platform')) {
+        if ($request->filled('platform')) {
             $query->whereHas('socialAccount', function ($q) use ($request) {
                 $q->where('platform', $request->platform);
             });
         }
 
         // Filter by status
-        if ($request->has('status')) {
+        if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
         // Filter by date range
-        if ($request->has('date_from')) {
+        if ($request->filled('date_from')) {
             $query->where('scheduled_at', '>=', $request->date_from);
         }
-        if ($request->has('date_to')) {
+        if ($request->filled('date_to')) {
             $query->where('scheduled_at', '<=', $request->date_to);
         }
 
@@ -54,7 +54,7 @@ class PostController extends Controller
         }
 
         // Search in content
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $query->where('content', 'like', '%' . $request->search . '%');
         }
 
