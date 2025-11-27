@@ -38,12 +38,26 @@ class LinkedInOAuthService
             'redirect_uri' => $this->redirectUri,
             'app_url' => config('app.url'),
         ]);
-        // LinkedIn scopes based on available products
-        // Note: Available scopes depend on which LinkedIn Products your app has access to
+        // LinkedIn scopes - requesting all available permissions for maximum functionality
+        // Note: Some scopes require specific LinkedIn Products to be enabled in Developer Portal
         $this->scopes = [
-            'liteprofile',                     // Basic profile information (deprecated but still works)
-            'emailaddress',                    // Email address
-            'w_member_social',                   // Post to LinkedIn
+            // Profile and Member Data
+            'r_basicprofile',                    // Basic profile (name, photo, headline, public profile URL)
+            'r_member_profileAnalytics',         // Profile analytics (viewers, followers, search appearances)
+            'r_1st_connections_size',            // Number of 1st-degree connections
+            
+            // Member Social Actions
+            'w_member_social',                   // Create, modify, delete posts, comments, reactions
+            'w_member_social_feed',              // Create, modify, delete comments and reactions on posts
+            'r_member_postAnalytics',            // Retrieve posts and their reporting data
+            
+            // Organization Management
+            'rw_organization_admin',             // Manage organization pages and retrieve reporting data
+            'r_organization_social',             // Retrieve organization posts, comments, reactions, engagement data
+            'w_organization_social',             // Create, modify, delete posts, comments, reactions for organization
+            'r_organization_social_feed',        // Retrieve comments, reactions, engagement data on organization posts
+            'w_organization_social_feed',        // Create, modify, delete comments and reactions on organization posts
+            'r_organization_followers',          // Use followers' data for organization mentions
         ];
     }
 
@@ -152,7 +166,6 @@ class LinkedInOAuthService
         return [
             'id' => $userId,
             'name' => $name,
-            'email' => $profileInfo['email'] ?? null,
             'access_token' => $accessToken,
             'refresh_token' => $tokenData['refresh_token'] ?? null,
             'expires_in' => $tokenData['expires_in'] ?? 5184000, // 60 days default
@@ -187,13 +200,21 @@ class LinkedInOAuthService
                 $profileInfo = [
                     'id' => $data['id'] ?? null,
                     'name' => $this->formatLinkedInName($data),
+                    'headline' => $data['headline'] ?? null,
+                    'public_profile_url' => $data['publicProfileUrl'] ?? null,
                     'source' => 'me_endpoint'
                 ];
                 
-                // Try to get email separately if we have the scope
-                $email = $this->tryGetEmail($accessToken);
-                if ($email) {
-                    $profileInfo['email'] = $email;
+                // Try to get additional profile analytics if available
+                $analytics = $this->tryGetProfileAnalytics($accessToken);
+                if ($analytics) {
+                    $profileInfo['analytics'] = $analytics;
+                }
+                
+                // Try to get connections count if available
+                $connectionsCount = $this->tryGetConnectionsCount($accessToken);
+                if ($connectionsCount !== null) {
+                    $profileInfo['connections_count'] = $connectionsCount;
                 }
                 
                 return $profileInfo;
@@ -281,37 +302,69 @@ class LinkedInOAuthService
         return 'LinkedIn User';
     }
 
+
+
     /**
-     * Try to get email address separately
+     * Try to get profile analytics data
      */
-    private function tryGetEmail(string $accessToken): ?string
+    private function tryGetProfileAnalytics(string $accessToken): ?array
     {
         try {
-            Log::info('Attempting to get LinkedIn email');
+            Log::info('Attempting to get LinkedIn profile analytics');
             
             $response = Http::withHeaders([
                 'Authorization' => "Bearer {$accessToken}",
                 'X-Restli-Protocol-Version' => '2.0.0'
-            ])->get('https://api.linkedin.com/v2/emailAddress', [
-                'q' => 'members',
-                'projection' => '(elements*(handle~))'
+            ])->get('https://api.linkedin.com/v2/people/~', [
+                'projection' => '(id,profileStatistics)'
             ]);
 
             if ($response->successful()) {
                 $data = $response->json();
-                Log::info('LinkedIn email success', ['data' => $data]);
+                Log::info('LinkedIn profile analytics success', ['data' => $data]);
                 
-                if (isset($data['elements'][0]['handle~']['emailAddress'])) {
-                    return $data['elements'][0]['handle~']['emailAddress'];
-                }
+                return $data['profileStatistics'] ?? null;
             } else {
-                Log::warning('LinkedIn email endpoint failed', [
+                Log::warning('LinkedIn profile analytics failed', [
                     'status' => $response->status(),
                     'response' => $response->body()
                 ]);
             }
         } catch (\Exception $e) {
-            Log::warning('LinkedIn email exception', ['error' => $e->getMessage()]);
+            Log::warning('LinkedIn profile analytics exception', ['error' => $e->getMessage()]);
+        }
+        
+        return null;
+    }
+
+    /**
+     * Try to get connections count
+     */
+    private function tryGetConnectionsCount(string $accessToken): ?int
+    {
+        try {
+            Log::info('Attempting to get LinkedIn connections count');
+            
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$accessToken}",
+                'X-Restli-Protocol-Version' => '2.0.0'
+            ])->get('https://api.linkedin.com/v2/people/~/network/network-sizes', [
+                'edgeType' => 'FIRST_DEGREE'
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                Log::info('LinkedIn connections count success', ['data' => $data]);
+                
+                return $data['firstDegreeSize'] ?? null;
+            } else {
+                Log::warning('LinkedIn connections count failed', [
+                    'status' => $response->status(),
+                    'response' => $response->body()
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::warning('LinkedIn connections count exception', ['error' => $e->getMessage()]);
         }
         
         return null;

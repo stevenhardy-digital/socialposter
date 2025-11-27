@@ -27,12 +27,26 @@ $this->scopes = [
 ];
 ```
 
-**New scopes:**
+**New scopes (all available permissions):**
 ```php
 $this->scopes = [
-    'r_liteprofile',     // Basic profile information
-    'r_emailaddress',    // Email address
-    'w_member_social',   // Post to LinkedIn
+    // Profile and Member Data
+    'r_basicprofile',                    // Basic profile (name, photo, headline, public profile URL)
+    'r_member_profileAnalytics',         // Profile analytics (viewers, followers, search appearances)
+    'r_1st_connections_size',            // Number of 1st-degree connections
+    
+    // Member Social Actions
+    'w_member_social',                   // Create, modify, delete posts, comments, reactions
+    'w_member_social_feed',              // Create, modify, delete comments and reactions on posts
+    'r_member_postAnalytics',            // Retrieve posts and their reporting data
+    
+    // Organization Management
+    'rw_organization_admin',             // Manage organization pages and retrieve reporting data
+    'r_organization_social',             // Retrieve organization posts, comments, reactions, engagement data
+    'w_organization_social',             // Create, modify, delete posts, comments, reactions for organization
+    'r_organization_social_feed',        // Retrieve comments, reactions, engagement data on organization posts
+    'w_organization_social_feed',        // Create, modify, delete comments and reactions on organization posts
+    'r_organization_followers',          // Use followers' data for organization mentions
 ];
 ```
 
@@ -51,26 +65,43 @@ $this->scopes = [
 ### Step 1: Enable Required Products
 In your LinkedIn Developer Portal (https://developer.linkedin.com/), you need to enable:
 
-1. **Sign In with LinkedIn** (basic product)
-   - This enables the `/me` and `/emailAddress` endpoints
-   - Provides basic profile information (name, email)
-   - Required for the `r_liteprofile` and `r_emailaddress` scopes
+1. **Share on LinkedIn** (default product)
+   - Enables: `r_basicprofile`, `w_member_social`
+   - Basic posting and profile access
 
-2. **Share on LinkedIn** (should already be enabled)
-   - Enables posting capabilities
-   - Required for `w_member_social` scope
+2. **Marketing Developer Platform** (request access)
+   - Enables: `r_member_profileAnalytics`, `r_member_postAnalytics`, `r_organization_social`, `w_organization_social`, `rw_organization_admin`, `r_organization_followers`, `r_organization_social_feed`, `w_organization_social_feed`
+   - Advanced analytics and organization management
 
-### Step 2: Update App Permissions
+3. **Advertising API** (request access if needed)
+   - Enables: `r_1st_connections_size`, `w_member_social_feed`
+   - Connection data and advanced social features
+
+### Step 2: Verify App Configuration
 1. Go to your LinkedIn app settings
 2. Navigate to the "Products" tab
-3. Request access to "Sign In with LinkedIn" (basic product)
-4. Wait for approval (usually instant for basic products)
+3. Ensure "Share on LinkedIn" is enabled (should be by default)
 
 ### Step 3: Verify Scopes
-In the "Auth" tab, ensure these scopes are available:
-- `r_liteprofile`
-- `r_emailaddress`
+In the "Auth" tab, verify which scopes are available based on your approved products:
+
+**Default (Share on LinkedIn):**
+- `r_basicprofile`
 - `w_member_social`
+
+**Marketing Developer Platform:**
+- `r_member_profileAnalytics`
+- `r_member_postAnalytics`
+- `r_organization_social`
+- `w_organization_social`
+- `rw_organization_admin`
+- `r_organization_followers`
+- `r_organization_social_feed`
+- `w_organization_social_feed`
+
+**Advertising API:**
+- `r_1st_connections_size`
+- `w_member_social_feed`
 
 ## Testing the Fix
 
@@ -90,15 +121,23 @@ Monitor the Laravel logs for:
 - Any remaining permission errors
 
 ### 3. Verify Profile Data
-The integration should now return:
+The integration will now return enhanced data based on available permissions:
 ```php
 [
     'id' => 'user_id',
     'name' => 'Full Name',
-    'email' => 'user@example.com',
-    'source' => 'me_endpoint' // or 'basic_profile' if fallback used
+    'headline' => 'Professional Title',
+    'public_profile_url' => 'https://linkedin.com/in/username',
+    'connections_count' => 500, // if r_1st_connections_size available
+    'analytics' => [...], // if r_member_profileAnalytics available
+    'source' => 'me_endpoint'
 ]
 ```
+
+**Available data depends on approved LinkedIn Products:**
+- Basic profile: Always available
+- Analytics: Requires Marketing Developer Platform
+- Connections count: Requires Advertising API access
 
 ## Alternative Solutions
 

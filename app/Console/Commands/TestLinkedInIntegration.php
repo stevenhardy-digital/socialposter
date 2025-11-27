@@ -54,9 +54,18 @@ class TestLinkedInIntegration extends Command
     private function testAccessToken(string $accessToken): void
     {
         $endpoints = [
+            // Basic Profile
             'me' => 'https://api.linkedin.com/v2/me',
-            'email' => 'https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))',
+            'profile_analytics' => 'https://api.linkedin.com/v2/people/~?projection=(id,profileStatistics)',
+            'connections_size' => 'https://api.linkedin.com/v2/people/~/network/network-sizes?edgeType=FIRST_DEGREE',
+            
+            // Organizations
             'organizations' => 'https://api.linkedin.com/v2/organizationAcls?q=roleAssignee&projection=(elements*(organization~(id,name)))',
+            'organization_followers' => 'https://api.linkedin.com/v2/networkSizes?q=organizationalEntity',
+            
+            // Posts and Analytics
+            'member_posts' => 'https://api.linkedin.com/v2/ugcPosts?q=authors&authors=List(urn:li:person:~)',
+            'post_analytics' => 'https://api.linkedin.com/v2/organizationalEntityShareStatistics?q=organizationalEntity',
         ];
 
         foreach ($endpoints as $name => $url) {
@@ -75,8 +84,16 @@ class TestLinkedInIntegration extends Command
                         $userName = trim(($data['localizedFirstName'] ?? '') . ' ' . ($data['localizedLastName'] ?? ''));
                         $this->info("     User: {$userName}");
                     }
-                    if ($name === 'email' && isset($data['elements'][0]['handle~']['emailAddress'])) {
-                        $this->info("     Email: {$data['elements'][0]['handle~']['emailAddress']}");
+                    if ($name === 'connections_size' && isset($data['firstDegreeSize'])) {
+                        $this->info("     Connections: {$data['firstDegreeSize']}");
+                    }
+                    if ($name === 'organizations' && isset($data['elements'])) {
+                        $orgCount = count($data['elements']);
+                        $this->info("     Organizations managed: {$orgCount}");
+                    }
+                    if ($name === 'member_posts' && isset($data['elements'])) {
+                        $postCount = count($data['elements']);
+                        $this->info("     Recent posts: {$postCount}");
                     }
                 } else {
                     $this->warn("   ✗ {$name} endpoint: FAILED (Status: {$response->status()})");
