@@ -278,6 +278,14 @@ class PostController extends Controller
      */
     public function createAndPublish(Request $request): JsonResponse
     {
+        // Debug log the incoming request
+        Log::info('CreateAndPublish request received', [
+            'all_data' => $request->all(),
+            'social_account_id' => $request->get('social_account_id'),
+            'content' => $request->get('content'),
+            'user_id' => Auth::id(),
+        ]);
+
         $request->validate([
             'social_account_id' => 'required|exists:social_accounts,id',
             'content' => 'required|string|max:2200',

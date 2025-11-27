@@ -234,7 +234,7 @@ export default {
     const loadSocialAccounts = async () => {
       try {
         const response = await axios.get('/api/social-accounts')
-        socialAccounts.value = response.data
+        socialAccounts.value = response.data.accounts || response.data
       } catch (error) {
         console.error('Error loading social accounts:', error)
         errorMessage.value = 'Failed to load social accounts'
@@ -260,17 +260,38 @@ export default {
 
     const createAndPublish = async () => {
       clearMessages()
+      
+      // Validate required fields
+      if (socialAccounts.value.length === 0) {
+        errorMessage.value = 'No social media accounts available. Please connect an account first.'
+        return
+      }
+      
+      if (!postForm.social_account_id) {
+        errorMessage.value = 'Please select a social media platform'
+        return
+      }
+      
+      if (!postForm.content.trim()) {
+        errorMessage.value = 'Please enter post content'
+        return
+      }
+      
       publishing.value = true
 
       try {
         // Filter out empty media URLs
         const mediaUrls = postForm.media_urls.filter(url => url.trim() !== '')
-
-        const response = await axios.post('/api/posts/create-and-publish', {
-          social_account_id: postForm.social_account_id,
+        
+        const payload = {
+          social_account_id: parseInt(postForm.social_account_id),
           content: postForm.content,
           media_urls: mediaUrls.length > 0 ? mediaUrls : null
-        })
+        }
+        
+        console.log('Sending payload:', payload)
+
+        const response = await axios.post('/api/posts/create-and-publish', payload)
 
         if (response.status === 201) {
           // Successfully published
@@ -288,7 +309,11 @@ export default {
         }
       } catch (error) {
         console.error('Error creating post:', error)
-        if (error.response?.data?.error) {
+        console.error('Error response:', error.response?.data)
+        
+        if (error.response?.data?.message) {
+          errorMessage.value = error.response.data.message
+        } else if (error.response?.data?.error) {
           errorMessage.value = error.response.data.error
         } else {
           errorMessage.value = 'Failed to create and publish post'
