@@ -240,7 +240,7 @@ export default {
     const fetchSocialAccounts = async () => {
       try {
         const response = await axios.get('/api/social-accounts')
-        socialAccounts.value = response.data.social_accounts || []
+        socialAccounts.value = response.data.accounts || response.data
       } catch (error) {
         console.error('Error fetching social accounts:', error)
       }
