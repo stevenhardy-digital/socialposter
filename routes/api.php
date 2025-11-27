@@ -82,6 +82,14 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::post('post/{post}/collect', [\App\Http\Controllers\AnalyticsController::class, 'collectMetrics']);
     });
 
+    // Media routes
+    Route::prefix('media')->group(function () {
+        Route::get('/', [\App\Http\Controllers\MediaController::class, 'index']);
+        Route::post('upload', [\App\Http\Controllers\MediaController::class, 'upload']);
+        Route::get('{media}', [\App\Http\Controllers\MediaController::class, 'show']);
+        Route::delete('{media}', [\App\Http\Controllers\MediaController::class, 'destroy']);
+    });
+
     // System monitoring routes
     Route::prefix('system')->group(function () {
         Route::get('dashboard', [\App\Http\Controllers\SystemController::class, 'dashboard']);

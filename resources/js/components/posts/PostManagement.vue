@@ -236,6 +236,82 @@
                     class="w-full border-gray-300 rounded-md"
                   />
                 </div>
+
+                <!-- Media Upload -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">Media (Optional)</label>
+                  <MediaUpload
+                    :platforms="getSelectedPlatforms()"
+                    @media-selected="addSelectedMedia"
+                    @media-uploaded="onMediaUploaded"
+                  />
+                  
+                  <!-- Selected Media Preview -->
+                  <div v-if="selectedMedia.length > 0" class="mt-4">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Selected Media</h4>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      <div
+                        v-for="(media, index) in selectedMedia"
+                        :key="media.id"
+                        class="relative"
+                      >
+                        <img
+                          :src="media.thumbnail_url"
+                          :alt="media.filename"
+                          class="w-full h-16 object-cover rounded border"
+                        />
+                        <button
+                          @click="removeSelectedMedia(index)"
+                          class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs hover:bg-red-600"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Legacy Media URLs -->
+                  <div v-if="postForm.media_urls && postForm.media_urls.length > 0" class="mt-4">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Media URLs</h4>
+                    <div class="space-y-2">
+                      <div
+                        v-for="(url, index) in postForm.media_urls"
+                        :key="index"
+                        class="flex space-x-2"
+                      >
+                        <input
+                          v-model="postForm.media_urls[index]"
+                          type="url"
+                          placeholder="https://example.com/image.jpg"
+                          class="flex-1 border-gray-300 rounded-md text-sm"
+                        />
+                        <button
+                          type="button"
+                          @click="removeMediaUrl(index)"
+                          class="px-2 py-1 text-red-600 hover:text-red-800 text-sm"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        @click="addMediaUrl"
+                        class="text-blue-600 hover:text-blue-800 text-sm"
+                      >
+                        + Add Media URL
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <button
+                    v-if="!postForm.media_urls || postForm.media_urls.length === 0"
+                    type="button"
+                    @click="addMediaUrl"
+                    class="mt-2 text-blue-600 hover:text-blue-800 text-sm"
+                  >
+                    + Add Media URL (Legacy)
+                  </button>
+                </div>
               </div>
 
               <div class="flex justify-end space-x-3 mt-6">
@@ -261,11 +337,15 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import axios from 'axios'
+import MediaUpload from '../media/MediaUpload.vue'
 
 export default {
   name: 'PostManagement',
+  components: {
+    MediaUpload
+  },
   setup() {
     const posts = ref([])
     const socialAccounts = ref([])
@@ -273,6 +353,7 @@ export default {
     const saving = ref(false)
     const showCreateModal = ref(false)
     const editingPost = ref(null)
+    const selectedMedia = ref([])
     
     const filters = reactive({
       status: '',
@@ -294,7 +375,8 @@ export default {
     const postForm = reactive({
       social_account_id: '',
       content: '',
-      scheduled_at: ''
+      scheduled_at: '',
+      media_urls: []
     })
 
     let searchTimeout = null
@@ -367,11 +449,14 @@ export default {
       editingPost.value = post
       postForm.content = post.content
       postForm.scheduled_at = post.scheduled_at ? new Date(post.scheduled_at).toISOString().slice(0, 16) : ''
+      postForm.media_urls = post.media_urls || []
+      selectedMedia.value = []
     }
 
     const cancelEdit = () => {
       showCreateModal.value = false
       editingPost.value = null
+      selectedMedia.value = []
       resetForm()
     }
 
@@ -379,18 +464,80 @@ export default {
       postForm.social_account_id = ''
       postForm.content = ''
       postForm.scheduled_at = ''
+      postForm.media_urls = []
+    }
+
+    const getSelectedPlatforms = () => {
+      if (editingPost.value) {
+        return editingPost.value.social_account?.platform ? [editingPost.value.social_account.platform] : []
+      }
+      const selectedAccount = socialAccounts.value.find(
+        account => account.id == postForm.social_account_id
+      )
+      return selectedAccount ? [selectedAccount.platform] : []
+    }
+
+    const addSelectedMedia = (media) => {
+      if (!selectedMedia.value.find(m => m.id === media.id)) {
+        selectedMedia.value.push(media)
+      }
+    }
+
+    const removeSelectedMedia = (index) => {
+      selectedMedia.value.splice(index, 1)
+    }
+
+    const onMediaUploaded = (uploadedMedia) => {
+      uploadedMedia.forEach(media => {
+        addSelectedMedia(media)
+      })
+    }
+
+    const addMediaUrl = () => {
+      if (!postForm.media_urls) {
+        postForm.media_urls = []
+      }
+      postForm.media_urls.push('')
+    }
+
+    const removeMediaUrl = (index) => {
+      postForm.media_urls.splice(index, 1)
+    }
+
+    const getMediaUrls = () => {
+      const platforms = getSelectedPlatforms()
+      const platform = platforms[0]
+      
+      if (!platform) return postForm.media_urls?.filter(url => url.trim() !== '') || []
+
+      // Get platform-specific URLs from selected media
+      const platformUrls = selectedMedia.value.map(media => {
+        return media.getPlatformUrl ? 
+          media.getPlatformUrl(platform) : 
+          media.original_url
+      }).filter(Boolean)
+
+      // Add existing URLs
+      const existingUrls = postForm.media_urls?.filter(url => url.trim() !== '') || []
+
+      return [...platformUrls, ...existingUrls]
     }
 
     const savePost = async () => {
       saving.value = true
       try {
+        const mediaUrls = getMediaUrls()
+        const payload = {
+          content: postForm.content,
+          scheduled_at: postForm.scheduled_at,
+          media_urls: mediaUrls.length > 0 ? mediaUrls : null
+        }
+
         if (editingPost.value) {
-          await axios.put(`/api/posts/${editingPost.value.id}`, {
-            content: postForm.content,
-            scheduled_at: postForm.scheduled_at
-          })
+          await axios.put(`/api/posts/${editingPost.value.id}`, payload)
         } else {
-          await axios.post('/api/posts', postForm)
+          payload.social_account_id = postForm.social_account_id
+          await axios.post('/api/posts', payload)
         }
         
         cancelEdit()
@@ -462,6 +609,7 @@ export default {
       saving,
       showCreateModal,
       editingPost,
+      selectedMedia,
       filters,
       pagination,
       postForm,
@@ -477,7 +625,13 @@ export default {
       deletePost,
       getStatusBadgeClass,
       truncateContent,
-      formatDate
+      formatDate,
+      getSelectedPlatforms,
+      addSelectedMedia,
+      removeSelectedMedia,
+      onMediaUploaded,
+      addMediaUrl,
+      removeMediaUrl
     }
   }
 }

@@ -152,6 +152,79 @@
                   />
                 </div>
 
+                <!-- Media Upload -->
+                <div v-if="selectedPost?.status !== 'published'">
+                  <label class="block text-sm font-medium text-gray-700 mb-2">Media</label>
+                  <MediaUpload
+                    :platforms="getSelectedPlatforms()"
+                    @media-selected="addSelectedMedia"
+                    @media-uploaded="onMediaUploaded"
+                  />
+                  
+                  <!-- Selected Media Preview -->
+                  <div v-if="selectedMedia.length > 0" class="mt-4">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Selected Media</h4>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      <div
+                        v-for="(media, index) in selectedMedia"
+                        :key="media.id"
+                        class="relative"
+                      >
+                        <img
+                          :src="media.thumbnail_url"
+                          :alt="media.filename"
+                          class="w-full h-16 object-cover rounded border"
+                        />
+                        <button
+                          @click="removeSelectedMedia(index)"
+                          class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs hover:bg-red-600"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Current Media URLs -->
+                  <div v-if="editForm.media_urls && editForm.media_urls.length > 0" class="mt-4">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Current Media</h4>
+                    <div class="space-y-2">
+                      <div
+                        v-for="(url, index) in editForm.media_urls"
+                        :key="index"
+                        class="flex items-center space-x-2"
+                      >
+                        <img
+                          :src="url"
+                          :alt="`Media ${index + 1}`"
+                          class="w-12 h-12 object-cover rounded border"
+                          @error="$event.target.style.display='none'"
+                        />
+                        <input
+                          v-model="editForm.media_urls[index]"
+                          type="url"
+                          class="flex-1 text-xs border-gray-300 rounded focus:border-indigo-500 focus:ring-indigo-500"
+                          :disabled="selectedPost?.status === 'published'"
+                        />
+                        <button
+                          v-if="selectedPost?.status !== 'published'"
+                          @click="removeMediaUrl(index)"
+                          class="px-2 py-1 text-xs text-red-600 hover:text-red-800"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <button
+                        v-if="selectedPost?.status !== 'published'"
+                        @click="addMediaUrl"
+                        class="text-xs text-blue-600 hover:text-blue-800"
+                      >
+                        + Add Media URL
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 <div v-if="selectedPost?.last_error" class="bg-red-50 border border-red-200 rounded-md p-3">
                   <div class="text-sm text-red-800">
                     <strong>Error:</strong> {{ selectedPost.last_error }}
@@ -194,9 +267,13 @@
 <script>
 import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
+import MediaUpload from '../media/MediaUpload.vue';
 
 export default {
   name: 'Calendar',
+  components: {
+    MediaUpload
+  },
   setup() {
     const currentDate = ref(new Date());
     const posts = ref({});
@@ -206,10 +283,12 @@ export default {
     const showModal = ref(false);
     const selectedPost = ref(null);
     const modalLoading = ref(false);
+    const selectedMedia = ref([]);
     const editForm = ref({
       status: '',
       content: '',
-      scheduled_at: ''
+      scheduled_at: '',
+      media_urls: []
     });
 
     const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -339,18 +418,22 @@ export default {
       editForm.value = {
         status: post.status,
         content: post.content,
-        scheduled_at: formatDateTimeLocal(post.scheduled_at)
+        scheduled_at: formatDateTimeLocal(post.scheduled_at),
+        media_urls: post.media_urls || []
       };
+      selectedMedia.value = [];
       showModal.value = true;
     };
 
     const closeModal = () => {
       showModal.value = false;
       selectedPost.value = null;
+      selectedMedia.value = [];
       editForm.value = {
         status: '',
         content: '',
-        scheduled_at: ''
+        scheduled_at: '',
+        media_urls: []
       };
     };
 
@@ -364,14 +447,62 @@ export default {
       return `${year}-${month}-${day}T${hours}:${minutes}`;
     };
 
+    const getSelectedPlatforms = () => {
+      return selectedPost.value?.social_account?.platform ? [selectedPost.value.social_account.platform] : [];
+    };
+
+    const addSelectedMedia = (media) => {
+      if (!selectedMedia.value.find(m => m.id === media.id)) {
+        selectedMedia.value.push(media);
+      }
+    };
+
+    const removeSelectedMedia = (index) => {
+      selectedMedia.value.splice(index, 1);
+    };
+
+    const onMediaUploaded = (uploadedMedia) => {
+      uploadedMedia.forEach(media => {
+        addSelectedMedia(media);
+      });
+    };
+
+    const addMediaUrl = () => {
+      editForm.value.media_urls.push('');
+    };
+
+    const removeMediaUrl = (index) => {
+      editForm.value.media_urls.splice(index, 1);
+    };
+
+    const getMediaUrls = () => {
+      const platform = selectedPost.value?.social_account?.platform;
+      if (!platform) return editForm.value.media_urls || [];
+
+      // Get platform-specific URLs from selected media
+      const platformUrls = selectedMedia.value.map(media => {
+        return media.getPlatformUrl ? 
+          media.getPlatformUrl(platform) : 
+          media.original_url;
+      }).filter(Boolean);
+
+      // Add existing URLs
+      const existingUrls = editForm.value.media_urls?.filter(url => url.trim() !== '') || [];
+
+      return [...platformUrls, ...existingUrls];
+    };
+
     const savePost = async () => {
       modalLoading.value = true;
       
       try {
+        const mediaUrls = getMediaUrls();
+        
         await axios.put(`/api/posts/${selectedPost.value.id}`, {
           content: editForm.value.content,
           status: editForm.value.status,
-          scheduled_at: new Date(editForm.value.scheduled_at).toISOString()
+          scheduled_at: new Date(editForm.value.scheduled_at).toISOString(),
+          media_urls: mediaUrls.length > 0 ? mediaUrls : null
         });
 
         await fetchCalendarPosts();
@@ -428,11 +559,18 @@ export default {
       showModal,
       selectedPost,
       modalLoading,
+      selectedMedia,
       editForm,
       openPostModal,
       closeModal,
       savePost,
-      deletePost
+      deletePost,
+      getSelectedPlatforms,
+      addSelectedMedia,
+      removeSelectedMedia,
+      onMediaUploaded,
+      addMediaUrl,
+      removeMediaUrl
     };
   }
 };

@@ -13,6 +13,7 @@ import PostManagement from '../components/posts/PostManagement.vue';
 import Calendar from '../components/calendar/Calendar.vue';
 import Analytics from '../components/analytics/Analytics.vue';
 import SystemStatus from '../components/SystemStatus.vue';
+import MediaManager from '../components/media/MediaManager.vue';
 
 const routes = [
     {
@@ -67,6 +68,11 @@ const routes = [
                 path: 'analytics',
                 name: 'Analytics',
                 component: Analytics
+            },
+            {
+                path: 'media',
+                name: 'MediaManager',
+                component: MediaManager
             },
             {
                 path: 'system-status',

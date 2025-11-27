@@ -52,41 +52,82 @@
                 </div>
               </div>
 
-              <!-- Media URLs (Optional) -->
+              <!-- Media Upload -->
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">
-                  Media URLs (Optional)
+                  Media (Optional)
                 </label>
-                <div class="space-y-2">
-                  <div
-                    v-for="(url, index) in postForm.media_urls"
-                    :key="index"
-                    class="flex space-x-2"
-                  >
-                    <input
-                      v-model="postForm.media_urls[index]"
-                      type="url"
-                      placeholder="https://example.com/image.jpg"
-                      class="flex-1 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      :disabled="publishing"
-                    />
-                    <button
-                      type="button"
-                      @click="removeMediaUrl(index)"
-                      class="px-3 py-2 text-red-600 hover:text-red-800"
-                      :disabled="publishing"
+                <MediaUpload
+                  :platforms="getSelectedPlatforms()"
+                  @media-selected="addSelectedMedia"
+                  @media-uploaded="onMediaUploaded"
+                />
+                
+                <!-- Selected Media Preview -->
+                <div v-if="selectedMedia.length > 0" class="mt-4">
+                  <h4 class="text-sm font-medium text-gray-700 mb-2">Selected Media</h4>
+                  <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div
+                      v-for="(media, index) in selectedMedia"
+                      :key="media.id"
+                      class="relative"
                     >
-                      Remove
-                    </button>
+                      <img
+                        :src="media.thumbnail_url"
+                        :alt="media.filename"
+                        class="w-full h-20 object-cover rounded border"
+                      />
+                      <button
+                        @click="removeSelectedMedia(index)"
+                        class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600"
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
+                </div>
+
+                <!-- Legacy Media URLs -->
+                <div class="mt-4">
                   <button
                     type="button"
-                    @click="addMediaUrl"
-                    class="text-blue-600 hover:text-blue-800 text-sm"
-                    :disabled="publishing"
+                    @click="showLegacyUrls = !showLegacyUrls"
+                    class="text-sm text-gray-600 hover:text-gray-800"
                   >
-                    + Add Media URL
+                    {{ showLegacyUrls ? 'Hide' : 'Show' }} URL Input (Legacy)
                   </button>
+                  
+                  <div v-if="showLegacyUrls" class="mt-2 space-y-2">
+                    <div
+                      v-for="(url, index) in postForm.media_urls"
+                      :key="index"
+                      class="flex space-x-2"
+                    >
+                      <input
+                        v-model="postForm.media_urls[index]"
+                        type="url"
+                        placeholder="https://example.com/image.jpg"
+                        class="flex-1 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        :disabled="publishing"
+                      />
+                      <button
+                        type="button"
+                        @click="removeMediaUrl(index)"
+                        class="px-3 py-2 text-red-600 hover:text-red-800"
+                        :disabled="publishing"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      @click="addMediaUrl"
+                      class="text-blue-600 hover:text-blue-800 text-sm"
+                      :disabled="publishing"
+                    >
+                      + Add Media URL
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -211,11 +252,15 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import axios from 'axios'
+import MediaUpload from '../media/MediaUpload.vue'
 
 export default {
   name: 'ManualPosting',
+  components: {
+    MediaUpload
+  },
   setup() {
     const socialAccounts = ref([])
     const publishing = ref(false)
@@ -224,6 +269,8 @@ export default {
     const errorMessage = ref('')
     const manualInstructions = ref(null)
     const createdPost = ref(null)
+    const selectedMedia = ref([])
+    const showLegacyUrls = ref(false)
 
     const postForm = reactive({
       social_account_id: '',
@@ -250,6 +297,50 @@ export default {
       if (postForm.media_urls.length === 0) {
         postForm.media_urls.push('')
       }
+    }
+
+    const getSelectedPlatforms = () => {
+      const selectedAccount = socialAccounts.value.find(
+        account => account.id == postForm.social_account_id
+      )
+      return selectedAccount ? [selectedAccount.platform] : []
+    }
+
+    const addSelectedMedia = (media) => {
+      if (!selectedMedia.value.find(m => m.id === media.id)) {
+        selectedMedia.value.push(media)
+      }
+    }
+
+    const removeSelectedMedia = (index) => {
+      selectedMedia.value.splice(index, 1)
+    }
+
+    const onMediaUploaded = (uploadedMedia) => {
+      // Automatically add uploaded media to selection
+      uploadedMedia.forEach(media => {
+        addSelectedMedia(media)
+      })
+    }
+
+    const getMediaUrls = () => {
+      const selectedAccount = socialAccounts.value.find(
+        account => account.id == postForm.social_account_id
+      )
+      
+      if (!selectedAccount) return []
+
+      // Get platform-specific URLs from selected media
+      const platformUrls = selectedMedia.value.map(media => {
+        return media.getPlatformUrl ? 
+          media.getPlatformUrl(selectedAccount.platform) : 
+          media.original_url
+      }).filter(Boolean)
+
+      // Add legacy URLs
+      const legacyUrls = postForm.media_urls.filter(url => url.trim() !== '')
+
+      return [...platformUrls, ...legacyUrls]
     }
 
     const clearMessages = () => {
@@ -280,8 +371,8 @@ export default {
       publishing.value = true
 
       try {
-        // Filter out empty media URLs
-        const mediaUrls = postForm.media_urls.filter(url => url.trim() !== '')
+        // Get all media URLs (uploaded + legacy)
+        const mediaUrls = getMediaUrls()
         
         const payload = {
           social_account_id: parseInt(postForm.social_account_id),
@@ -328,8 +419,8 @@ export default {
       saving.value = true
 
       try {
-        // Filter out empty media URLs
-        const mediaUrls = postForm.media_urls.filter(url => url.trim() !== '')
+        // Get all media URLs (uploaded + legacy)
+        const mediaUrls = getMediaUrls()
 
         await axios.post('/api/posts', {
           social_account_id: postForm.social_account_id,
@@ -376,6 +467,7 @@ export default {
       postForm.social_account_id = ''
       postForm.content = ''
       postForm.media_urls = ['']
+      selectedMedia.value = []
     }
 
     onMounted(() => {
@@ -390,12 +482,18 @@ export default {
       errorMessage,
       manualInstructions,
       postForm,
+      selectedMedia,
+      showLegacyUrls,
       createAndPublish,
       saveDraft,
       addMediaUrl,
       removeMediaUrl,
       copyContent,
-      markAsPublished
+      markAsPublished,
+      getSelectedPlatforms,
+      addSelectedMedia,
+      removeSelectedMedia,
+      onMediaUploaded
     }
   }
 }
