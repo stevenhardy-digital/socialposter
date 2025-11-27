@@ -13,11 +13,13 @@ app.use(router);
 
 // Initialize auth store after pinia is set up
 const authStore = useAuthStore();
-authStore.initializeAuth();
 
 // Listen for session expiry events
 window.addEventListener('auth:session-expired', () => {
     authStore.handleSessionExpiry();
 });
 
-app.mount('#app');
+// Initialize auth before mounting the app
+authStore.initializeAuth().then(() => {
+    app.mount('#app');
+});

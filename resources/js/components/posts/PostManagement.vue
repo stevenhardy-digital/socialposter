@@ -334,7 +334,9 @@ export default {
     const loadSocialAccounts = async () => {
       try {
         const response = await axios.get('/api/social-accounts')
-        socialAccounts.value = response.data
+        console.log(response)
+        socialAccounts.value = response.data.accounts || response.data
+        console.log(socialAccounts.value)
       } catch (error) {
         console.error('Error loading social accounts:', error)
       }

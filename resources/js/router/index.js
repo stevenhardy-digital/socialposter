@@ -83,8 +83,20 @@ const router = createRouter({
 });
 
 // Navigation guards
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
     const authStore = useAuthStore();
+    
+    // Wait for auth initialization to complete
+    if (!authStore.isAuthInitialized) {
+        // If auth is not initialized yet, wait for it
+        let attempts = 0;
+        const maxAttempts = 50; // 5 seconds max wait
+        
+        while (!authStore.isAuthInitialized && attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+        }
+    }
     
     if (to.meta.requiresAuth && !authStore.isAuthenticated) {
         next('/login');

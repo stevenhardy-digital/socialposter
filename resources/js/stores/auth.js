@@ -7,13 +7,15 @@ export const useAuthStore = defineStore('auth', {
         user: null,
         token: localStorage.getItem('token'),
         isAuthenticated: false,
-        tokenExpiry: localStorage.getItem('token_expiry')
+        tokenExpiry: localStorage.getItem('token_expiry'),
+        authInitialized: false
     }),
 
     getters: {
         getUser: (state) => state.user,
         getToken: (state) => state.token,
-        isLoggedIn: (state) => state.isAuthenticated
+        isLoggedIn: (state) => state.isAuthenticated,
+        isAuthInitialized: (state) => state.authInitialized
     },
 
     actions: {
@@ -75,24 +77,31 @@ export const useAuthStore = defineStore('auth', {
                 if (error.response && error.response.status === 401) {
                     // Token is invalid or expired
                     this.handleSessionExpiry();
+                } else {
+                    // For other errors, still clear auth state to be safe
+                    this.clearAuthData();
                 }
                 throw error;
             }
         },
 
-        initializeAuth() {
+        async initializeAuth() {
             if (this.token) {
                 // Check if token is expired
                 if (this.isTokenExpired()) {
                     this.handleSessionExpiry();
+                    this.authInitialized = true;
                     return;
                 }
                 
                 axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`;
-                this.fetchUser().catch(() => {
+                try {
+                    await this.fetchUser();
+                } catch (error) {
                     this.handleSessionExpiry();
-                });
+                }
             }
+            this.authInitialized = true;
         },
 
         setAuthData(data) {
@@ -115,6 +124,7 @@ export const useAuthStore = defineStore('auth', {
             this.user = null;
             this.isAuthenticated = false;
             this.tokenExpiry = null;
+            this.authInitialized = true;
             
             localStorage.removeItem('token');
             localStorage.removeItem('token_expiry');
