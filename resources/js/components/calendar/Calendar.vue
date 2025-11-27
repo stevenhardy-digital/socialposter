@@ -63,7 +63,7 @@
                   :class="getPostStatusClass(post.status)"
                 >
                   <div class="font-medium truncate">
-                    {{ post.socialAccount.platform }}
+                    {{ post.social_account.platform }}
                   </div>
                   <div class="truncate">
                     {{ post.content.substring(0, 50) }}...
