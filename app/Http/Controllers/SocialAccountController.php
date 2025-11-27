@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\SocialAccountResource;
 use App\Models\SocialAccount;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -21,7 +22,7 @@ class SocialAccountController extends Controller
         
         return response()->json([
             'success' => true,
-            'accounts' => $accounts
+            'accounts' => SocialAccountResource::collection($accounts)
         ]);
     }
 

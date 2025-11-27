@@ -111,7 +111,7 @@
                       {{ post.status.charAt(0).toUpperCase() + post.status.slice(1) }}
                     </span>
                     <span class="text-sm text-gray-500">
-                      {{ post.social_account.platform.charAt(0).toUpperCase() + post.social_account.platform.slice(1) }}
+                      {{ (post.social_account?.platform || '').charAt(0).toUpperCase() + (post.social_account?.platform || '').slice(1) }}
                     </span>
                     <span v-if="post.is_ai_generated" class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
                       AI Generated
@@ -212,7 +212,7 @@
                       :key="account.id"
                       :value="account.id"
                     >
-                      {{ account.platform.charAt(0).toUpperCase() + account.platform.slice(1) }} - {{ account.account_name }}
+                      {{ (account.platform || '').charAt(0).toUpperCase() + (account.platform || '').slice(1) }} - {{ account.account_name || 'Unknown Account' }}
                     </option>
                   </select>
                 </div>

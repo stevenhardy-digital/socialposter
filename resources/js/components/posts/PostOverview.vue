@@ -173,7 +173,7 @@
                       {{ post.status.charAt(0).toUpperCase() + post.status.slice(1) }}
                     </span>
                     <span class="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
-                      {{ post.social_account.platform.charAt(0).toUpperCase() + post.social_account.platform.slice(1) }}
+                      {{ (post.social_account?.platform || '').charAt(0).toUpperCase() + (post.social_account?.platform || '').slice(1) }}
                     </span>
                     <span v-if="post.is_ai_generated" class="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">
                       AI Generated
@@ -361,7 +361,7 @@
                       {{ selectedPost.status.charAt(0).toUpperCase() + selectedPost.status.slice(1) }}
                     </span>
                     <span class="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
-                      {{ selectedPost.social_account.platform.charAt(0).toUpperCase() + selectedPost.social_account.platform.slice(1) }}
+                      {{ (selectedPost.social_account?.platform || '').charAt(0).toUpperCase() + (selectedPost.social_account?.platform || '').slice(1) }}
                     </span>
                     <span v-if="selectedPost.is_ai_generated" class="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">
                       AI Generated

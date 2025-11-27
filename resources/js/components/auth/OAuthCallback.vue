@@ -68,7 +68,7 @@ export default {
                 router.push({
                   name: 'AccountSettings',
                   query: {
-                    success: `${platform.charAt(0).toUpperCase() + platform.slice(1)} account "${accountName}" connected successfully!`
+                    success: `${(platform || '').charAt(0).toUpperCase() + (platform || '').slice(1)} account "${accountName}" connected successfully!`
                   }
                 });
               }, 1500);

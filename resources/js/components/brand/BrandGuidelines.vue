@@ -21,7 +21,7 @@
                 <div class="flex-shrink-0">
                   <span class="inline-flex items-center justify-center h-10 w-10 rounded-full bg-gray-500">
                     <span class="text-sm font-medium leading-none text-white">
-                      {{ account.platform.charAt(0).toUpperCase() }}
+                      {{ (account.platform || '').charAt(0).toUpperCase() }}
                     </span>
                   </span>
                 </div>

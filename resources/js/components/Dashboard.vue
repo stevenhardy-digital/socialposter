@@ -145,11 +145,11 @@
                   <div class="flex items-center">
                     <div class="flex-shrink-0">
                       <div :class="platformIconClass(platform)" class="w-8 h-8 rounded-full flex items-center justify-center">
-                        <span class="text-white text-sm font-medium">{{ platform.charAt(0).toUpperCase() }}</span>
+                        <span class="text-white text-sm font-medium">{{ (platform || '').charAt(0).toUpperCase() }}</span>
                       </div>
                     </div>
                     <div class="ml-3">
-                      <p class="text-sm font-medium text-gray-900">{{ platform.charAt(0).toUpperCase() + platform.slice(1) }}</p>
+                      <p class="text-sm font-medium text-gray-900">{{ (platform || '').charAt(0).toUpperCase() + (platform || '').slice(1) }}</p>
                       <p class="text-sm text-gray-500">{{ accounts.length }} account{{ accounts.length !== 1 ? 's' : '' }}</p>
                     </div>
                   </div>
@@ -209,7 +209,7 @@
               >
                 <div class="flex-shrink-0">
                   <div :class="platformIconClass(post.social_account.platform)" class="w-8 h-8 rounded-full flex items-center justify-center">
-                    <span class="text-white text-xs font-medium">{{ post.social_account.platform.charAt(0).toUpperCase() }}</span>
+                    <span class="text-white text-xs font-medium">{{ (post.social_account?.platform || '').charAt(0).toUpperCase() }}</span>
                   </div>
                 </div>
                 <div class="flex-1 min-w-0">

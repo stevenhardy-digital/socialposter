@@ -23,13 +23,13 @@
                 <div class="flex-shrink-0">
                   <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                     <span class="text-blue-600 font-medium text-sm">
-                      {{ account.platform.charAt(0).toUpperCase() }}
+                      {{ (account.platform || '').charAt(0).toUpperCase() }}
                     </span>
                   </div>
                 </div>
                 <div>
                   <p class="text-sm font-medium text-gray-900">{{ account.account_name }}</p>
-                  <p class="text-sm text-gray-500">{{ account.platform.charAt(0).toUpperCase() + account.platform.slice(1) }}</p>
+                  <p class="text-sm text-gray-500">{{ (account.platform || '').charAt(0).toUpperCase() + (account.platform || '').slice(1) }}</p>
                 </div>
               </div>
               <div class="flex items-center space-x-2">
