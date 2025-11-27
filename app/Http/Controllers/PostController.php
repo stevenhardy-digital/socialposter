@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\PostResource;
 use App\Models\Post;
 use App\Models\SocialAccount;
 use App\Services\SocialMediaPublishingService;
@@ -61,7 +62,7 @@ class PostController extends Controller
         $posts = $query->orderBy('scheduled_at', 'desc')
             ->paginate($request->get('per_page', 15));
 
-        return response()->json($posts);
+        return \App\Http\Resources\PostResource::collection($posts);
     }
 
     /**
@@ -92,7 +93,7 @@ class PostController extends Controller
             'is_ai_generated' => $request->get('is_ai_generated', false)
         ]);
 
-        return response()->json($post->load(['socialAccount', 'engagementMetrics']), 201);
+        return new PostResource($post->load(['socialAccount', 'engagementMetrics']));
     }
 
     /**
@@ -105,7 +106,7 @@ class PostController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        return response()->json($post->load(['socialAccount', 'engagementMetrics']));
+        return new PostResource($post->load(['socialAccount', 'engagementMetrics']));
     }
 
     /**
@@ -135,7 +136,7 @@ class PostController extends Controller
             'content', 'media_urls', 'scheduled_at', 'status'
         ]));
 
-        return response()->json($post->load(['socialAccount', 'engagementMetrics']));
+        return new PostResource($post->load(['socialAccount', 'engagementMetrics']));
     }
 
     /**
@@ -174,7 +175,7 @@ class PostController extends Controller
 
         $post->update(['status' => 'approved']);
 
-        return response()->json($post->load(['socialAccount', 'engagementMetrics']));
+        return new PostResource($post->load(['socialAccount', 'engagementMetrics']));
     }
 
     /**
@@ -193,7 +194,7 @@ class PostController extends Controller
 
         $post->update(['status' => 'rejected']);
 
-        return response()->json($post->load(['socialAccount', 'engagementMetrics']));
+        return new PostResource($post->load(['socialAccount', 'engagementMetrics']));
     }
 
     /**
@@ -209,7 +210,7 @@ class PostController extends Controller
             ->orderBy('created_at', 'desc')
             ->paginate(15);
 
-        return response()->json($posts);
+        return PostResource::collection($posts);
     }
 
     /**
@@ -264,7 +265,7 @@ class PostController extends Controller
 
         $post->update(['scheduled_at' => $request->scheduled_at]);
 
-        return response()->json($post->load(['socialAccount', 'engagementMetrics']));
+        return new PostResource($post->load(['socialAccount', 'engagementMetrics']));
     }
 
     /**

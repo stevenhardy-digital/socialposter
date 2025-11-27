@@ -31,6 +31,30 @@ class SocialAccount extends Model
         'refresh_token',
     ];
 
+    /**
+     * Ensure platform is never null for frontend compatibility
+     */
+    public function getPlatformAttribute($value): string
+    {
+        return $value ?? '';
+    }
+
+    /**
+     * Ensure platform_user_id is never null for frontend compatibility
+     */
+    public function getPlatformUserIdAttribute($value): string
+    {
+        return $value ?? '';
+    }
+
+    /**
+     * Ensure account_name is never null for frontend compatibility
+     */
+    public function getAccountNameAttribute($value): string
+    {
+        return $value ?? '';
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

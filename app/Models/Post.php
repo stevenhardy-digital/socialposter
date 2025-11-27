@@ -32,6 +32,38 @@ class Post extends Model
         'error_at' => 'datetime',
     ];
 
+    /**
+     * Ensure content is never null for frontend compatibility
+     */
+    public function getContentAttribute($value): string
+    {
+        return $value ?? '';
+    }
+
+    /**
+     * Ensure status is never null for frontend compatibility
+     */
+    public function getStatusAttribute($value): string
+    {
+        return $value ?? 'draft';
+    }
+
+    /**
+     * Ensure platform_post_id is never null for frontend compatibility
+     */
+    public function getPlatformPostIdAttribute($value): string
+    {
+        return $value ?? '';
+    }
+
+    /**
+     * Ensure last_error is never null for frontend compatibility
+     */
+    public function getLastErrorAttribute($value): string
+    {
+        return $value ?? '';
+    }
+
     public function socialAccount(): BelongsTo
     {
         return $this->belongsTo(SocialAccount::class);

@@ -24,6 +24,34 @@ class EngagementMetric extends Model
         'collected_at' => 'datetime',
     ];
 
+    /**
+     * Ensure numeric fields are never null for frontend compatibility
+     */
+    public function getLikesCountAttribute($value): int
+    {
+        return $value ?? 0;
+    }
+
+    public function getCommentsCountAttribute($value): int
+    {
+        return $value ?? 0;
+    }
+
+    public function getSharesCountAttribute($value): int
+    {
+        return $value ?? 0;
+    }
+
+    public function getReachAttribute($value): int
+    {
+        return $value ?? 0;
+    }
+
+    public function getImpressionsAttribute($value): int
+    {
+        return $value ?? 0;
+    }
+
     public function post(): BelongsTo
     {
         return $this->belongsTo(Post::class);
