@@ -54,8 +54,8 @@ class TestLinkedInIntegration extends Command
     private function testAccessToken(string $accessToken): void
     {
         $endpoints = [
-            'userinfo' => 'https://api.linkedin.com/v2/userinfo',
-            'basic_profile' => 'https://api.linkedin.com/v2/people/~?projection=(id,localizedFirstName,localizedLastName)',
+            'me' => 'https://api.linkedin.com/v2/me',
+            'email' => 'https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))',
             'organizations' => 'https://api.linkedin.com/v2/organizationAcls?q=roleAssignee&projection=(elements*(organization~(id,name)))',
         ];
 
@@ -71,8 +71,12 @@ class TestLinkedInIntegration extends Command
                 if ($response->successful()) {
                     $this->info("   ✓ {$name} endpoint: SUCCESS");
                     $data = $response->json();
-                    if ($name === 'userinfo' && isset($data['name'])) {
-                        $this->info("     User: {$data['name']}");
+                    if ($name === 'me' && (isset($data['localizedFirstName']) || isset($data['localizedLastName']))) {
+                        $userName = trim(($data['localizedFirstName'] ?? '') . ' ' . ($data['localizedLastName'] ?? ''));
+                        $this->info("     User: {$userName}");
+                    }
+                    if ($name === 'email' && isset($data['elements'][0]['handle~']['emailAddress'])) {
+                        $this->info("     Email: {$data['elements'][0]['handle~']['emailAddress']}");
                     }
                 } else {
                     $this->warn("   ✗ {$name} endpoint: FAILED (Status: {$response->status()})");

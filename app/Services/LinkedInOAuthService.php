@@ -38,11 +38,11 @@ class LinkedInOAuthService
             'redirect_uri' => $this->redirectUri,
             'app_url' => config('app.url'),
         ]);
-        // Updated LinkedIn scopes for current API
+        // LinkedIn scopes based on available products
+        // Note: Available scopes depend on which LinkedIn Products your app has access to
         $this->scopes = [
-            'openid',                            // OpenID Connect for basic profile
-            'profile',                           // Basic profile information
-            'email',                             // Email address
+            'r_liteprofile',                     // Basic profile information (deprecated but still works)
+            'r_emailaddress',                    // Email address
             'w_member_social',                   // Post to LinkedIn
         ];
     }
@@ -171,36 +171,43 @@ class LinkedInOAuthService
     {
         $profileInfo = [];
         
-        // Try OpenID Connect userinfo endpoint first (most reliable)
+        // Try the /me endpoint (standard LinkedIn API)
         try {
-            Log::info('Attempting LinkedIn userinfo endpoint');
+            Log::info('Attempting LinkedIn /me endpoint');
             
             $response = Http::withHeaders([
                 'Authorization' => "Bearer {$accessToken}",
-            ])->get('https://api.linkedin.com/v2/userinfo');
+                'X-Restli-Protocol-Version' => '2.0.0'
+            ])->get('https://api.linkedin.com/v2/me');
 
             if ($response->successful()) {
                 $data = $response->json();
-                Log::info('LinkedIn userinfo success', ['data' => $data]);
+                Log::info('LinkedIn /me endpoint success', ['data' => $data]);
                 
-                return [
-                    'id' => $data['sub'] ?? null,
-                    'name' => $data['name'] ?? null,
-                    'email' => $data['email'] ?? null,
-                    'picture' => $data['picture'] ?? null,
-                    'source' => 'userinfo'
+                $profileInfo = [
+                    'id' => $data['id'] ?? null,
+                    'name' => $this->formatLinkedInName($data),
+                    'source' => 'me_endpoint'
                 ];
+                
+                // Try to get email separately if we have the scope
+                $email = $this->tryGetEmail($accessToken);
+                if ($email) {
+                    $profileInfo['email'] = $email;
+                }
+                
+                return $profileInfo;
             } else {
-                Log::warning('LinkedIn endpoint userinfo failed', [
+                Log::warning('LinkedIn /me endpoint failed', [
                     'status' => $response->status(),
                     'response' => $response->body()
                 ]);
             }
         } catch (\Exception $e) {
-            Log::warning('LinkedIn userinfo exception', ['error' => $e->getMessage()]);
+            Log::warning('LinkedIn /me endpoint exception', ['error' => $e->getMessage()]);
         }
 
-        // Try basic profile endpoint with minimal fields
+        // Try basic profile endpoint with minimal fields as fallback
         try {
             Log::info('Attempting LinkedIn basic profile endpoint');
             
@@ -235,13 +242,79 @@ class LinkedInOAuthService
         
         return [
             'status' => 'limited_access',
-            'message' => 'LinkedIn app needs "Sign In with LinkedIn using OpenID Connect" product enabled',
+            'message' => 'LinkedIn app needs appropriate products enabled (Sign In with LinkedIn or Marketing Developer Platform)',
             'required_products' => [
-                'Sign In with LinkedIn using OpenID Connect'
+                'Sign In with LinkedIn using OpenID Connect',
+                'Marketing Developer Platform'
             ],
             'current_capabilities' => ['Basic OAuth', 'Posting (w_member_social)'],
             'source' => 'fallback'
         ];
+    }
+
+    /**
+     * Format LinkedIn name from API response
+     */
+    private function formatLinkedInName(array $data): string
+    {
+        // Try localized names first
+        if (isset($data['localizedFirstName']) || isset($data['localizedLastName'])) {
+            return trim(($data['localizedFirstName'] ?? '') . ' ' . ($data['localizedLastName'] ?? ''));
+        }
+        
+        // Try firstName/lastName structure
+        if (isset($data['firstName']['localized']) || isset($data['lastName']['localized'])) {
+            $firstName = '';
+            $lastName = '';
+            
+            if (isset($data['firstName']['localized'])) {
+                $firstName = reset($data['firstName']['localized']);
+            }
+            
+            if (isset($data['lastName']['localized'])) {
+                $lastName = reset($data['lastName']['localized']);
+            }
+            
+            return trim($firstName . ' ' . $lastName);
+        }
+        
+        return 'LinkedIn User';
+    }
+
+    /**
+     * Try to get email address separately
+     */
+    private function tryGetEmail(string $accessToken): ?string
+    {
+        try {
+            Log::info('Attempting to get LinkedIn email');
+            
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$accessToken}",
+                'X-Restli-Protocol-Version' => '2.0.0'
+            ])->get('https://api.linkedin.com/v2/emailAddress', [
+                'q' => 'members',
+                'projection' => '(elements*(handle~))'
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                Log::info('LinkedIn email success', ['data' => $data]);
+                
+                if (isset($data['elements'][0]['handle~']['emailAddress'])) {
+                    return $data['elements'][0]['handle~']['emailAddress'];
+                }
+            } else {
+                Log::warning('LinkedIn email endpoint failed', [
+                    'status' => $response->status(),
+                    'response' => $response->body()
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::warning('LinkedIn email exception', ['error' => $e->getMessage()]);
+        }
+        
+        return null;
     }
 
     /**
@@ -370,10 +443,12 @@ class LinkedInOAuthService
 
             foreach ($testEndpoints as $name => $url) {
                 try {
-                    $testResponse = Http::withHeaders([
-                        'Authorization' => "Bearer {$accessToken}",
-                        'X-Restli-Protocol-Version' => '2.0.0'
-                    ])->get($url);
+                    $headers = ['Authorization' => "Bearer {$accessToken}"];
+                    if ($name !== 'userinfo') {
+                        $headers['X-Restli-Protocol-Version'] = '2.0.0';
+                    }
+                    
+                    $testResponse = Http::withHeaders($headers)->get($url);
                     
                     $permissions[$name] = $testResponse->successful();
                 } catch (\Exception $e) {

@@ -30,15 +30,15 @@ $this->scopes = [
 **New scopes:**
 ```php
 $this->scopes = [
-    'openid',            // OpenID Connect for basic profile
-    'profile',           // Basic profile information  
-    'email',             // Email address
+    'r_liteprofile',     // Basic profile information
+    'r_emailaddress',    // Email address
     'w_member_social',   // Post to LinkedIn
 ];
 ```
 
 ### 2. Updated Profile Information Retrieval
-- Now uses OpenID Connect `/userinfo` endpoint as primary method
+- Primary method: LinkedIn `/me` endpoint (standard API)
+- Separate email retrieval using `/emailAddress` endpoint
 - Falls back to basic profile endpoint with minimal fields
 - Handles permission errors gracefully
 
@@ -51,10 +51,10 @@ $this->scopes = [
 ### Step 1: Enable Required Products
 In your LinkedIn Developer Portal (https://developer.linkedin.com/), you need to enable:
 
-1. **Sign In with LinkedIn using OpenID Connect**
-   - This enables the `/userinfo` endpoint
-   - Provides basic profile information (name, email, picture)
-   - Required for the `openid`, `profile`, and `email` scopes
+1. **Sign In with LinkedIn** (basic product)
+   - This enables the `/me` and `/emailAddress` endpoints
+   - Provides basic profile information (name, email)
+   - Required for the `r_liteprofile` and `r_emailaddress` scopes
 
 2. **Share on LinkedIn** (should already be enabled)
    - Enables posting capabilities
@@ -63,14 +63,13 @@ In your LinkedIn Developer Portal (https://developer.linkedin.com/), you need to
 ### Step 2: Update App Permissions
 1. Go to your LinkedIn app settings
 2. Navigate to the "Products" tab
-3. Request access to "Sign In with LinkedIn using OpenID Connect"
+3. Request access to "Sign In with LinkedIn" (basic product)
 4. Wait for approval (usually instant for basic products)
 
 ### Step 3: Verify Scopes
 In the "Auth" tab, ensure these scopes are available:
-- `openid`
-- `profile` 
-- `email`
+- `r_liteprofile`
+- `r_emailaddress`
 - `w_member_social`
 
 ## Testing the Fix
@@ -97,15 +96,14 @@ The integration should now return:
     'id' => 'user_id',
     'name' => 'Full Name',
     'email' => 'user@example.com',
-    'picture' => 'profile_picture_url',
-    'source' => 'userinfo' // or 'basic_profile' if fallback used
+    'source' => 'me_endpoint' // or 'basic_profile' if fallback used
 ]
 ```
 
 ## Alternative Solutions
 
-### If OpenID Connect Product is Not Available
-If you cannot get the OpenID Connect product approved:
+### If Sign In with LinkedIn Product is Not Available
+If you cannot get the Sign In with LinkedIn product approved:
 
 1. **Use minimal profile data:**
    ```php
