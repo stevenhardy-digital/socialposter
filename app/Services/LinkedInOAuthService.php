@@ -41,8 +41,8 @@ class LinkedInOAuthService
         // LinkedIn scopes based on available products
         // Note: Available scopes depend on which LinkedIn Products your app has access to
         $this->scopes = [
-            'r_liteprofile',                     // Basic profile information (deprecated but still works)
-            'r_emailaddress',                    // Email address
+            'liteprofile',                     // Basic profile information (deprecated but still works)
+            'emailaddress',                    // Email address
             'w_member_social',                   // Post to LinkedIn
         ];
     }
