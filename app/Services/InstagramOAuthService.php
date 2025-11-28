@@ -19,33 +19,55 @@ class InstagramOAuthService
         $this->clientId = config('services.instagram.client_id');
         $this->clientSecret = config('services.instagram.client_secret');
         $this->redirectUri = config('services.instagram.redirect');
-        // Instagram Business API scopes for managed accounts
+        
+        // Validate credentials are set
+        if (empty($this->clientId) || empty($this->clientSecret)) {
+            Log::error('Instagram OAuth credentials missing', [
+                'client_id_set' => !empty($this->clientId),
+                'client_secret_set' => !empty($this->clientSecret),
+                'redirect_uri' => $this->redirectUri,
+            ]);
+            throw new \Exception('Instagram OAuth credentials not configured. Please set INSTAGRAM_CLIENT_ID and INSTAGRAM_CLIENT_SECRET in your .env file.');
+        }
+        
+        // Instagram Business API scopes - comprehensive permissions
         $this->scopes = [
-            'instagram_basic',
-            'instagram_content_publish',
-            'pages_show_list',
-            'pages_read_engagement',
-            'business_management'
+            'instagram_business_basic',              // Basic profile information and media
+            'instagram_business_manage_messages',    // Manage direct messages
+            'instagram_business_manage_comments',    // Manage comments on posts
+            'instagram_business_content_publish',    // Create and publish content
+            'instagram_business_manage_insights'     // Access analytics and insights
         ];
     }
 
     /**
      * Generate OAuth authorization URL
      */
-    public function getAuthorizationUrl(): string
+    public function getAuthorizationUrl(array $userData = []): string
     {
-        $state = Str::random(40);
+        // Use the database state key if provided, otherwise create a simple state
+        $state = $userData['state_key'] ?? Str::random(40);
+        
+        // Store in session as backup
         session(['instagram_oauth_state' => $state]);
 
         $params = [
             'client_id' => $this->clientId,
             'redirect_uri' => $this->redirectUri,
-            'scope' => implode(',', $this->scopes),
+            'scope' => implode('%2C', $this->scopes), // URL encode commas
             'response_type' => 'code',
             'state' => $state,
+            'force_reauth' => 'true', // Force re-authentication for fresh permissions
         ];
 
-        return 'https://www.facebook.com/v18.0/dialog/oauth?' . http_build_query($params);
+        Log::info('Instagram OAuth URL generated', [
+            'client_id' => $this->clientId,
+            'redirect_uri' => $this->redirectUri,
+            'scopes' => $this->scopes,
+            'state' => $state,
+        ]);
+
+        return 'https://www.instagram.com/oauth/authorize?' . http_build_query($params);
     }
 
     /**
@@ -53,12 +75,22 @@ class InstagramOAuthService
      */
     public function handleCallback(Request $request): array
     {
-        // Verify state parameter
+        // Get state parameter
         $state = $request->get('state');
-        $sessionState = session('instagram_oauth_state');
+        if (!$state) {
+            throw new \Exception('OAuth state parameter missing');
+        }
+
+        // Try to get state data from database first
+        $stateData = \App\Models\OAuthState::consumeState($state);
         
-        if (!$state || $state !== $sessionState) {
-            throw new \Exception('Invalid OAuth state parameter');
+        if (!$stateData) {
+            // Fallback to session verification for backward compatibility
+            $sessionState = session('instagram_oauth_state');
+            if ($state !== $sessionState) {
+                throw new \Exception('Invalid OAuth state parameter');
+            }
+            $stateData = []; // Empty state data for session-based flow
         }
 
         // Clear the state from session
@@ -74,10 +106,18 @@ class InstagramOAuthService
             throw new \Exception('Authorization code not provided');
         }
 
-        // Exchange code for access token
-        $tokenResponse = Http::asForm()->post('https://graph.facebook.com/v18.0/oauth/access_token', [
+        Log::info('Instagram token exchange attempt', [
+            'redirect_uri' => $this->redirectUri,
+            'client_id' => $this->clientId,
+            'code_length' => strlen($code),
+            'code_preview' => substr($code, 0, 10) . '...',
+        ]);
+
+        // Exchange code for access token using Instagram's token endpoint
+        $tokenResponse = Http::asForm()->post('https://api.instagram.com/oauth/access_token', [
             'client_id' => $this->clientId,
             'client_secret' => $this->clientSecret,
+            'grant_type' => 'authorization_code',
             'redirect_uri' => $this->redirectUri,
             'code' => $code,
         ]);
@@ -86,75 +126,88 @@ class InstagramOAuthService
             Log::error('Instagram token exchange failed', [
                 'status' => $tokenResponse->status(),
                 'response' => $tokenResponse->body(),
+                'request_params' => array_merge([
+                    'client_id' => $this->clientId,
+                    'grant_type' => 'authorization_code',
+                    'redirect_uri' => $this->redirectUri,
+                    'code' => substr($code, 0, 10) . '...',
+                ], ['client_secret' => '[REDACTED]']),
             ]);
-            throw new \Exception('Failed to exchange authorization code for access token');
+            throw new \Exception('Failed to exchange authorization code for access token: ' . $tokenResponse->body());
         }
 
         $tokenData = $tokenResponse->json();
         $accessToken = $tokenData['access_token'];
 
-        // Get user's Facebook pages (which may have Instagram Business accounts)
-        $pagesResponse = Http::get('https://graph.facebook.com/v18.0/me/accounts', [
-            'access_token' => $accessToken,
-            'fields' => 'id,name,access_token,instagram_business_account'
-        ]);
-
-        if (!$pagesResponse->successful()) {
-            Log::error('Instagram pages fetch failed', [
-                'status' => $pagesResponse->status(),
-                'response' => $pagesResponse->body(),
-            ]);
-            throw new \Exception('Failed to fetch Facebook pages');
-        }
-
-        $pagesData = $pagesResponse->json();
+        // Get Instagram Business account information
+        $profileInfo = $this->tryGetInstagramProfile($accessToken);
         
-        // Find pages with Instagram Business accounts
-        $instagramAccounts = [];
-        foreach ($pagesData['data'] ?? [] as $page) {
-            if (isset($page['instagram_business_account']['id'])) {
-                $instagramAccounts[] = [
-                    'page_id' => $page['id'],
-                    'page_name' => $page['name'],
-                    'instagram_id' => $page['instagram_business_account']['id'],
-                    'page_access_token' => $page['access_token']
-                ];
-            }
-        }
+        // Use profile info if available, otherwise generate fallback
+        $userId = $profileInfo['id'] ?? 'instagram_' . substr(hash('sha256', $accessToken), 0, 16);
+        $name = $profileInfo['username'] ?? $profileInfo['name'] ?? 'Instagram Business Account';
 
-        if (empty($instagramAccounts)) {
-            throw new \Exception('No Instagram Business accounts found. Please ensure your Facebook page is connected to an Instagram Business account.');
-        }
-
-        // For now, return the first Instagram account found
-        // In a full implementation, you might want to let the user choose
-        $primaryAccount = $instagramAccounts[0];
-
-        // Get Instagram account details
-        $instagramResponse = Http::get("https://graph.facebook.com/v18.0/{$primaryAccount['instagram_id']}", [
-            'access_token' => $primaryAccount['page_access_token'],
-            'fields' => 'id,username,name,profile_picture_url'
+        Log::info('Instagram OAuth complete', [
+            'profile_info' => $profileInfo,
+            'access_token_preview' => substr($accessToken, 0, 20) . '...'
         ]);
-
-        if (!$instagramResponse->successful()) {
-            Log::error('Instagram account details fetch failed', [
-                'status' => $instagramResponse->status(),
-                'response' => $instagramResponse->body(),
-            ]);
-            throw new \Exception('Failed to fetch Instagram account details');
-        }
-
-        $instagramData = $instagramResponse->json();
 
         return [
-            'id' => $instagramData['id'],
-            'name' => $instagramData['username'] ?? $instagramData['name'] ?? 'Instagram Business Account',
-            'access_token' => $primaryAccount['page_access_token'],
-            'refresh_token' => null, // Facebook tokens don't use refresh tokens in the traditional sense
-            'expires_in' => 5184000, // 60 days - Facebook long-lived tokens
-            'page_id' => $primaryAccount['page_id'],
-            'page_name' => $primaryAccount['page_name'],
-            'all_accounts' => $instagramAccounts, // Store all available accounts for future use
+            'id' => $userId,
+            'name' => $name,
+            'access_token' => $accessToken,
+            'refresh_token' => null, // Instagram doesn't use refresh tokens
+            'expires_in' => $tokenData['expires_in'] ?? 5184000, // Default to 60 days
+            'state_data' => $stateData, // Include the decoded state data
+            'profile_info' => $profileInfo,
+        ];
+    }
+
+    /**
+     * Try to get Instagram Business profile information
+     */
+    private function tryGetInstagramProfile(string $accessToken): array
+    {
+        $profileInfo = [];
+        
+        try {
+            Log::info('Attempting Instagram Business profile endpoint');
+            
+            // Try Instagram Business API endpoint
+            $response = Http::get('https://graph.instagram.com/me', [
+                'access_token' => $accessToken,
+                'fields' => 'id,username,name,profile_picture_url,followers_count,media_count'
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                Log::info('Instagram Business profile success', ['data' => $data]);
+                
+                return [
+                    'id' => $data['id'] ?? null,
+                    'username' => $data['username'] ?? null,
+                    'name' => $data['name'] ?? null,
+                    'profile_picture_url' => $data['profile_picture_url'] ?? null,
+                    'followers_count' => $data['followers_count'] ?? null,
+                    'media_count' => $data['media_count'] ?? null,
+                    'source' => 'instagram_business_api'
+                ];
+            } else {
+                Log::warning('Instagram Business profile failed', [
+                    'status' => $response->status(),
+                    'response' => $response->body()
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::warning('Instagram Business profile exception', ['error' => $e->getMessage()]);
+        }
+
+        // If Business API fails, return limited info
+        Log::info('Instagram Business profile endpoint failed - using fallback');
+        
+        return [
+            'status' => 'limited_access',
+            'message' => 'Instagram Business account connected with basic access',
+            'source' => 'fallback'
         ];
     }
 
