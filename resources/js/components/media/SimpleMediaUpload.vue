@@ -79,7 +79,7 @@
           
           
                                                                                                                                                                     <!-- Hover overlay with buttons -->
-          <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity rounded flex items-center justify-center z-20">
+          <div class="absolute inset-0 group-hover:bg-opacity-30 transition-opacity rounded flex items-center justify-center z-20">
             <div class="opacity-0 group-hover:opacity-100 flex space-x-2 transition-opacity duration-200">
               <button
                 @click="openPreviewModal(media)"
