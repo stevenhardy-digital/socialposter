@@ -38,10 +38,25 @@ class LinkedInOAuthService
             'redirect_uri' => $this->redirectUri,
             'app_url' => config('app.url'),
         ]);
-        // LinkedIn scopes - using only basic working scopes to avoid permission errors
+        // LinkedIn scopes - comprehensive permissions for full platform functionality
         $this->scopes = [
-            'r_basicprofile',                    // Basic profile (name, photo, headline, public profile URL)
-            'w_member_social',                   // Create, modify, delete posts, comments, reactions
+            // Basic profile and authentication
+            'r_basicprofile',                    // Use your basic profile including your name, photo, headline, and public profile URL
+            
+            // Member permissions
+            'w_member_social',                   // Create, modify, and delete posts, comments, and reactions on your behalf
+            'w_member_social_feed',              // Create, modify, and delete comments and reactions on posts on your behalf
+            'r_member_profile',                  // Retrieve your profile analytics, including number of profile viewers, followers, and search appearances
+            'r_member_post',                     // Retrieve your posts and their reporting data
+            'r_1st_connections_size',            // Retrieve the number of 1st-degree connections within your network
+            
+            // Organization permissions
+            'rw_organization_admin',             // Manage your organization's pages and retrieve reporting data
+            'w_organization_social',             // Create, modify, and delete posts, comments, and reactions on your organization's behalf
+            'w_organization_social_feed',        // Create, modify, and delete comments and reactions on your organization's posts
+            'r_organization_social',             // Retrieve your organization's posts, comments, reactions, and other engagement data
+            'r_organization_social_feed',        // Retrieve comments, reactions, and other engagement data on your organization's posts
+            'r_organization_followers',          // Use your followers' data so your organization can mention them in posts
         ];
     }
 
@@ -296,6 +311,23 @@ class LinkedInOAuthService
         try {
             Log::info('Attempting to get LinkedIn profile analytics');
             
+            // Try member profile analytics endpoint
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$accessToken}",
+                'X-Restli-Protocol-Version' => '2.0.0'
+            ])->get('https://api.linkedin.com/v2/networkSizes/urn:li:person:~');
+
+            if ($response->successful()) {
+                $data = $response->json();
+                Log::info('LinkedIn profile analytics success', ['data' => $data]);
+                
+                return [
+                    'network_sizes' => $data,
+                    'source' => 'network_sizes_endpoint'
+                ];
+            }
+
+            // Fallback to basic profile statistics
             $response = Http::withHeaders([
                 'Authorization' => "Bearer {$accessToken}",
                 'X-Restli-Protocol-Version' => '2.0.0'
@@ -305,9 +337,12 @@ class LinkedInOAuthService
 
             if ($response->successful()) {
                 $data = $response->json();
-                Log::info('LinkedIn profile analytics success', ['data' => $data]);
+                Log::info('LinkedIn profile analytics fallback success', ['data' => $data]);
                 
-                return $data['profileStatistics'] ?? null;
+                return [
+                    'profile_statistics' => $data['profileStatistics'] ?? null,
+                    'source' => 'profile_statistics'
+                ];
             } else {
                 Log::warning('LinkedIn profile analytics failed', [
                     'status' => $response->status(),
@@ -364,13 +399,13 @@ class LinkedInOAuthService
         try {
             Log::info('Attempting to fetch LinkedIn company pages');
 
-            // Try to get organizations the user administers
+            // Try to get organizations the user administers with enhanced projection
             $response = Http::withHeaders([
                 'Authorization' => "Bearer {$accessToken}",
                 'X-Restli-Protocol-Version' => '2.0.0'
             ])->get('https://api.linkedin.com/v2/organizationAcls', [
                 'q' => 'roleAssignee',
-                'projection' => '(elements*(organization~(id,name)))'
+                'projection' => '(elements*(organization~(id,name,localizedName,logoV2),roleAssignee,role))'
             ]);
 
             if ($response->successful()) {
@@ -385,7 +420,10 @@ class LinkedInOAuthService
                             $org = $element['organization~'];
                             $companyPages[] = [
                                 'id' => $org['id'],
-                                'name' => $org['name'] ?? 'Unknown Company',
+                                'name' => $org['localizedName'] ?? $org['name'] ?? 'Unknown Company',
+                                'role' => $element['role'] ?? 'UNKNOWN',
+                                'logo' => $org['logoV2'] ?? null,
+                                'permissions' => $this->getOrganizationPermissions($element['role'] ?? 'UNKNOWN')
                             ];
                         }
                     }
@@ -403,6 +441,77 @@ class LinkedInOAuthService
         }
 
         return $companyPages;
+    }
+
+    /**
+     * Get organization permissions based on role
+     */
+    private function getOrganizationPermissions(string $role): array
+    {
+        $permissions = [
+            'ADMINISTRATOR' => [
+                'can_post' => true,
+                'can_manage' => true,
+                'can_view_analytics' => true,
+                'can_manage_followers' => true
+            ],
+            'CONTENT_ADMIN' => [
+                'can_post' => true,
+                'can_manage' => false,
+                'can_view_analytics' => true,
+                'can_manage_followers' => false
+            ],
+            'ORGANIC_POSTER' => [
+                'can_post' => true,
+                'can_manage' => false,
+                'can_view_analytics' => false,
+                'can_manage_followers' => false
+            ],
+            'UNKNOWN' => [
+                'can_post' => false,
+                'can_manage' => false,
+                'can_view_analytics' => false,
+                'can_manage_followers' => false
+            ]
+        ];
+
+        return $permissions[$role] ?? $permissions['UNKNOWN'];
+    }
+
+    /**
+     * Try to get member posts data
+     */
+    private function tryGetMemberPosts(string $accessToken): ?array
+    {
+        try {
+            Log::info('Attempting to get LinkedIn member posts');
+            
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$accessToken}",
+                'X-Restli-Protocol-Version' => '2.0.0'
+            ])->get('https://api.linkedin.com/v2/shares', [
+                'q' => 'owners',
+                'owners' => 'urn:li:person:~',
+                'sortBy' => 'CREATED_TIME',
+                'sharesPerOwner' => 10
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                Log::info('LinkedIn member posts success', ['data' => $data]);
+                
+                return $data;
+            } else {
+                Log::warning('LinkedIn member posts failed', [
+                    'status' => $response->status(),
+                    'response' => $response->body()
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::warning('LinkedIn member posts exception', ['error' => $e->getMessage()]);
+        }
+        
+        return null;
     }
 
     /**
@@ -453,7 +562,53 @@ class LinkedInOAuthService
             'details' => $details
         ]);
 
+        // Add comprehensive permission testing
+        $details['scope_verification'] = $this->verifyAllScopes($accessToken);
+        $details['member_posts'] = $this->tryGetMemberPosts($accessToken);
+
         return $details;
+    }
+
+    /**
+     * Verify all requested scopes are working
+     */
+    private function verifyAllScopes(string $accessToken): array
+    {
+        $scopeStatus = [];
+        
+        // Map scopes to their verification methods
+        $scopeVerification = [
+            'r_basicprofile' => 'basic_profile',
+            'w_member_social' => 'member_social',
+            'w_member_social_feed' => 'member_social',
+            'r_member_profile' => 'member_profile_analytics',
+            'r_member_post' => 'member_posts',
+            'r_1st_connections_size' => 'connections_size',
+            'rw_organization_admin' => 'organizations',
+            'w_organization_social' => 'organization_social',
+            'w_organization_social_feed' => 'organization_social',
+            'r_organization_social' => 'organization_social',
+            'r_organization_social_feed' => 'organization_social',
+            'r_organization_followers' => 'organizations'
+        ];
+
+        $permissions = $this->getTokenPermissions($accessToken);
+
+        foreach ($this->scopes as $scope) {
+            $testKey = $scopeVerification[$scope] ?? null;
+            $scopeStatus[$scope] = [
+                'requested' => true,
+                'granted' => $testKey ? ($permissions[$testKey] ?? false) : false,
+                'test_endpoint' => $testKey
+            ];
+        }
+
+        return [
+            'total_scopes' => count($this->scopes),
+            'granted_scopes' => count(array_filter($scopeStatus, fn($s) => $s['granted'])),
+            'scope_details' => $scopeStatus,
+            'all_granted' => count(array_filter($scopeStatus, fn($s) => $s['granted'])) === count($this->scopes)
+        ];
     }
 
     /**
@@ -461,41 +616,63 @@ class LinkedInOAuthService
      */
     private function getTokenPermissions(string $accessToken): array
     {
-        try {
-            // Try to introspect the token to see what permissions it has
-            $response = Http::withHeaders([
-                'Authorization' => "Bearer {$accessToken}",
-                'X-Restli-Protocol-Version' => '2.0.0'
-            ])->get('https://api.linkedin.com/v2/people/~', [
-                'projection' => '(id)'
-            ]);
+        $permissions = [];
+        
+        // Test endpoints for each scope to verify permissions
+        $scopeTests = [
+            'basic_profile' => [
+                'url' => 'https://api.linkedin.com/v2/people/~',
+                'params' => ['projection' => '(id,localizedFirstName,localizedLastName)']
+            ],
+            'member_profile_analytics' => [
+                'url' => 'https://api.linkedin.com/v2/networkSizes/urn:li:person:~',
+                'params' => []
+            ],
+            'member_posts' => [
+                'url' => 'https://api.linkedin.com/v2/shares',
+                'params' => ['q' => 'owners', 'owners' => 'urn:li:person:~', 'count' => 1]
+            ],
+            'member_social' => [
+                'url' => 'https://api.linkedin.com/v2/people/~',
+                'params' => ['projection' => '(id)']
+            ],
+            'organizations' => [
+                'url' => 'https://api.linkedin.com/v2/organizationAcls',
+                'params' => ['q' => 'roleAssignee', 'count' => 1]
+            ],
+            'organization_social' => [
+                'url' => 'https://api.linkedin.com/v2/organizationalEntityShareStatistics',
+                'params' => ['q' => 'organizationalEntity', 'count' => 1]
+            ],
+            'connections_size' => [
+                'url' => 'https://api.linkedin.com/v2/people/~/network/network-sizes',
+                'params' => ['edgeType' => 'FIRST_DEGREE']
+            ]
+        ];
 
-            $permissions = ['basic_profile' => $response->successful()];
+        foreach ($scopeTests as $scope => $test) {
+            try {
+                $response = Http::withHeaders([
+                    'Authorization' => "Bearer {$accessToken}",
+                    'X-Restli-Protocol-Version' => '2.0.0'
+                ])->get($test['url'], $test['params']);
 
-            // Test other endpoints to see what's available
-            $testEndpoints = [
-                'organizations' => 'https://api.linkedin.com/v2/organizationAcls?q=roleAssignee',
-                'userinfo' => 'https://api.linkedin.com/v2/userinfo',
-            ];
-
-            foreach ($testEndpoints as $name => $url) {
-                try {
-                    $headers = ['Authorization' => "Bearer {$accessToken}"];
-                    if ($name !== 'userinfo') {
-                        $headers['X-Restli-Protocol-Version'] = '2.0.0';
-                    }
-                    
-                    $testResponse = Http::withHeaders($headers)->get($url);
-                    
-                    $permissions[$name] = $testResponse->successful();
-                } catch (\Exception $e) {
-                    $permissions[$name] = false;
+                $permissions[$scope] = $response->successful();
+                
+                if ($response->successful()) {
+                    Log::info("LinkedIn scope test passed: {$scope}");
+                } else {
+                    Log::warning("LinkedIn scope test failed: {$scope}", [
+                        'status' => $response->status(),
+                        'response' => $response->body()
+                    ]);
                 }
+            } catch (\Exception $e) {
+                $permissions[$scope] = false;
+                Log::warning("LinkedIn scope test exception: {$scope}", ['error' => $e->getMessage()]);
             }
-
-            return $permissions;
-        } catch (\Exception $e) {
-            return ['error' => $e->getMessage()];
         }
+
+        return $permissions;
     }
 }
