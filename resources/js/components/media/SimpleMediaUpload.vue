@@ -78,19 +78,29 @@
           </div>
           
           
-          <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity rounded flex items-center justify-center">
-            <button
-              @click="selectMedia(media)"
-              class="opacity-0 group-hover:opacity-100 px-2 py-1 bg-white text-xs rounded"
-            >
-              Select
-            </button>
+                                                                                                                                                                    <!-- Hover overlay with buttons -->
+          <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity rounded flex items-center justify-center z-20">
+            <div class="opacity-0 group-hover:opacity-100 flex space-x-2 transition-opacity duration-200">
+              <button
+                @click="openPreviewModal(media)"
+                class="px-3 py-1 bg-white text-xs rounded shadow-md font-medium hover:bg-gray-100"
+              >
+                Preview
+              </button>
+              <button
+                @click="selectMedia(media)"
+                class="px-3 py-1 bg-blue-600 text-white text-xs rounded shadow-md font-medium hover:bg-blue-700"
+              >
+                Select
+              </button>
+            </div>
           </div>
           
-          <div class="absolute top-1 right-1">
+          <!-- Delete button -->
+          <div class="absolute top-2 right-2 z-30">
             <button
               @click="deleteMedia(media.id)"
-              class="w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600"
+              class="w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center shadow-md"
             >
               ×
             </button>
@@ -105,6 +115,147 @@
               class="w-2 h-2 rounded-full"
               :title="`${platform} crop ${hasPlatformCrop(media, platform) ? 'available' : 'not available'}`"
             ></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Media Preview Modal -->
+    <div v-if="showPreviewModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" @click="closePreviewModal">
+      <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-4/5 lg:w-3/4 xl:w-2/3 shadow-lg rounded-md bg-white" @click.stop>
+        <div class="mt-3">
+          <!-- Modal Header -->
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-medium text-gray-900">Media Preview - {{ selectedMediaForPreview?.filename }}</h3>
+            <button @click="closePreviewModal" class="text-gray-400 hover:text-gray-600">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Media Info -->
+          <div class="mb-6 bg-gray-50 p-4 rounded-lg">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span class="font-medium text-gray-700">File Size:</span>
+                <span class="text-gray-600 ml-1">{{ selectedMediaForPreview?.formatted_file_size }}</span>
+              </div>
+              <div>
+                <span class="font-medium text-gray-700">Dimensions:</span>
+                <span class="text-gray-600 ml-1">{{ selectedMediaForPreview?.width }}×{{ selectedMediaForPreview?.height }}</span>
+              </div>
+              <div>
+                <span class="font-medium text-gray-700">Type:</span>
+                <span class="text-gray-600 ml-1">{{ selectedMediaForPreview?.mime_type }}</span>
+              </div>
+              <div>
+                <span class="font-medium text-gray-700">Uploaded:</span>
+                <span class="text-gray-600 ml-1">{{ formatDate(selectedMediaForPreview?.created_at) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Original Image -->
+          <div class="mb-6">
+            <h4 class="text-md font-medium text-gray-900 mb-3">Original Image</h4>
+            <div class="bg-gray-100 rounded-lg p-4">
+              <img
+                :src="selectedMediaForPreview?.original_url"
+                :alt="selectedMediaForPreview?.filename"
+                class="max-w-full h-auto mx-auto rounded border shadow-sm"
+                style="max-height: 400px;"
+              />
+              <div class="mt-2 text-center">
+                <a
+                  :href="selectedMediaForPreview?.original_url"
+                  target="_blank"
+                  class="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                >
+                  <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                  </svg>
+                  View Full Size
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Platform Crops -->
+          <div v-if="getPlatformCrops(selectedMediaForPreview).length > 0">
+            <h4 class="text-md font-medium text-gray-900 mb-3">Platform-Specific Crops</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div
+                v-for="crop in getPlatformCrops(selectedMediaForPreview)"
+                :key="crop.platform"
+                class="bg-gray-50 rounded-lg p-4"
+              >
+                <h5 class="font-medium text-gray-800 mb-2 capitalize">{{ crop.platform }}</h5>
+                <div class="mb-2">
+                  <img
+                    :src="crop.url"
+                    :alt="`${selectedMediaForPreview?.filename} - ${crop.platform}`"
+                    class="w-full h-32 object-cover rounded border"
+                  />
+                </div>
+                <div class="text-xs text-gray-600 space-y-1">
+                  <div>Size: {{ crop.width }}×{{ crop.height }}</div>
+                  <div>Aspect: {{ getPlatformAspectRatio(crop.platform) }}</div>
+                </div>
+                <div class="mt-2">
+                  <a
+                    :href="crop.url"
+                    target="_blank"
+                    class="inline-flex items-center px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                  >
+                    <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                    </svg>
+                    Download
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Thumbnail -->
+          <div v-if="selectedMediaForPreview?.thumbnail_url" class="mt-6">
+            <h4 class="text-md font-medium text-gray-900 mb-3">Thumbnail</h4>
+            <div class="bg-gray-50 rounded-lg p-4 inline-block">
+              <img
+                :src="selectedMediaForPreview?.thumbnail_url"
+                :alt="`${selectedMediaForPreview?.filename} thumbnail`"
+                class="w-24 h-24 object-cover rounded border"
+              />
+              <div class="mt-2 text-xs text-gray-600 text-center">
+                200×200px
+              </div>
+            </div>
+          </div>
+
+          <!-- Modal Actions -->
+          <div class="flex justify-between items-center mt-6 pt-4 border-t border-gray-200">
+            <button
+              @click="selectMedia(selectedMediaForPreview)"
+              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              Select This Media
+            </button>
+            
+            <div class="flex space-x-3">
+              <button
+                @click="closePreviewModal"
+                class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+              >
+                Close
+              </button>
+              <button
+                @click="deleteMedia(selectedMediaForPreview.id)"
+                class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                Delete Media
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -134,6 +285,8 @@ export default {
     const uploading = ref(false)
     const uploadedMedia = ref([])
     const fileInput = ref(null)
+    const showPreviewModal = ref(false)
+    const selectedMediaForPreview = ref(null)
 
     const handleDrop = (e) => {
       e.preventDefault()
@@ -287,6 +440,62 @@ export default {
       event.target.style.opacity = '1'
     }
 
+    const openPreviewModal = (media) => {
+      selectedMediaForPreview.value = media
+      showPreviewModal.value = true
+    }
+
+    const closePreviewModal = () => {
+      showPreviewModal.value = false
+      selectedMediaForPreview.value = null
+    }
+
+    const getPlatformCrops = (media) => {
+      if (!media || !media.platform_crops) return []
+      
+      let crops
+      if (typeof media.platform_crops === 'string') {
+        try {
+          crops = JSON.parse(media.platform_crops)
+        } catch (e) {
+          return []
+        }
+      } else {
+        crops = media.platform_crops
+      }
+      
+      return Object.entries(crops).map(([platform, cropData]) => ({
+        platform,
+        url: cropData.url,
+        width: cropData.width,
+        height: cropData.height,
+        crop_data: cropData.crop_data
+      }))
+    }
+
+    const getPlatformAspectRatio = (platform) => {
+      const ratios = {
+        instagram: '1:1',
+        facebook: '1.91:1',
+        linkedin: '1.91:1',
+        twitter: '1.91:1',
+        'instagram-story': '9:16',
+        'facebook-story': '9:16'
+      }
+      return ratios[platform] || 'Custom'
+    }
+
+    const formatDate = (dateString) => {
+      if (!dateString) return 'Unknown'
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    }
+
     const loadUploadedMedia = async () => {
       try {
         const response = await axios.get('/api/media')
@@ -316,6 +525,8 @@ export default {
       uploading,
       uploadedMedia,
       fileInput,
+      showPreviewModal,
+      selectedMediaForPreview,
       handleDrop,
       handleFileSelect,
       selectMedia,
@@ -323,7 +534,12 @@ export default {
       hasPlatformCrop,
       getImageUrl,
       handleImageError,
-      handleImageLoad
+      handleImageLoad,
+      openPreviewModal,
+      closePreviewModal,
+      getPlatformCrops,
+      getPlatformAspectRatio,
+      formatDate
     }
   }
 }
@@ -360,6 +576,14 @@ export default {
   z-index: 10;
 }
 
+.z-20 {
+  z-index: 20;
+}
+
+.z-30 {
+  z-index: 30;
+}
+
 /* Image loading states */
 img[loading="lazy"] {
   opacity: 0;
@@ -368,5 +592,20 @@ img[loading="lazy"] {
 
 img[loading="lazy"].loaded {
   opacity: 1;
+}
+
+/* Hover effects */
+.group:hover .group-hover\:opacity-100 {
+  opacity: 1 !important;
+}
+
+.group:hover .group-hover\:bg-opacity-30 {
+  background-opacity: 0.3 !important;
+}
+
+/* Ensure buttons are clickable */
+button {
+  position: relative;
+  z-index: inherit;
 }
 </style>

@@ -104,8 +104,9 @@
                     v-model="newTheme"
                     type="text"
                     class="flex-1 border-gray-300 rounded-l-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Add a content theme"
-                    @keyup.enter="addTheme"
+                    placeholder="Add content themes (press Tab, Enter, or use comma to add)"
+                    @keydown="handleThemeKeydown"
+                    @input="handleThemeInput"
                   />
                   <button
                     type="button"
@@ -148,8 +149,9 @@
                     v-model="newHashtag"
                     type="text"
                     class="flex-1 border-gray-300 rounded-l-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Add a hashtag (with #)"
-                    @keyup.enter="addHashtag"
+                    placeholder="Add hashtags (press Tab, Enter, or use comma to add)"
+                    @keydown="handleHashtagKeydown"
+                    @input="handleHashtagInput"
                   />
                   <button
                     type="button"
@@ -302,10 +304,50 @@ export default {
       }
     }
 
-    const addTheme = () => {
-      if (newTheme.value.trim() && !form.content_themes.includes(newTheme.value.trim())) {
-        form.content_themes.push(newTheme.value.trim())
-        newTheme.value = ''
+    const addTheme = (themeText = null) => {
+      const theme = (themeText || newTheme.value).trim()
+      if (theme && !form.content_themes.includes(theme)) {
+        form.content_themes.push(theme)
+        if (!themeText) {
+          newTheme.value = ''
+        }
+        return true
+      }
+      return false
+    }
+
+    const handleThemeKeydown = (event) => {
+      // Handle Tab key
+      if (event.key === 'Tab') {
+        event.preventDefault()
+        if (addTheme()) {
+          // Focus stays on the input for continuous adding
+        }
+      }
+      // Handle Enter key
+      else if (event.key === 'Enter') {
+        event.preventDefault()
+        addTheme()
+      }
+    }
+
+    const handleThemeInput = (event) => {
+      const value = event.target.value
+      
+      // Handle comma-separated input
+      if (value.includes(',')) {
+        const themes = value.split(',')
+        const lastTheme = themes.pop() // Keep the last part in the input
+        
+        // Add all complete themes
+        themes.forEach(theme => {
+          if (theme.trim()) {
+            addTheme(theme.trim())
+          }
+        })
+        
+        // Update input with remaining text
+        newTheme.value = lastTheme.trim()
       }
     }
 
@@ -313,14 +355,53 @@ export default {
       form.content_themes.splice(index, 1)
     }
 
-    const addHashtag = () => {
-      let hashtag = newHashtag.value.trim()
+    const addHashtag = (hashtagText = null) => {
+      let hashtag = (hashtagText || newHashtag.value).trim()
       if (hashtag && !hashtag.startsWith('#')) {
         hashtag = '#' + hashtag
       }
-      if (hashtag && !form.hashtag_strategy.includes(hashtag)) {
+      if (hashtag && hashtag.length > 1 && !form.hashtag_strategy.includes(hashtag)) {
         form.hashtag_strategy.push(hashtag)
-        newHashtag.value = ''
+        if (!hashtagText) {
+          newHashtag.value = ''
+        }
+        return true
+      }
+      return false
+    }
+
+    const handleHashtagKeydown = (event) => {
+      // Handle Tab key
+      if (event.key === 'Tab') {
+        event.preventDefault()
+        if (addHashtag()) {
+          // Focus stays on the input for continuous adding
+        }
+      }
+      // Handle Enter key
+      else if (event.key === 'Enter') {
+        event.preventDefault()
+        addHashtag()
+      }
+    }
+
+    const handleHashtagInput = (event) => {
+      const value = event.target.value
+      
+      // Handle comma-separated input
+      if (value.includes(',')) {
+        const hashtags = value.split(',')
+        const lastHashtag = hashtags.pop() // Keep the last part in the input
+        
+        // Add all complete hashtags
+        hashtags.forEach(hashtag => {
+          if (hashtag.trim()) {
+            addHashtag(hashtag.trim())
+          }
+        })
+        
+        // Update input with remaining text
+        newHashtag.value = lastHashtag.trim()
       }
     }
 
@@ -353,7 +434,11 @@ export default {
       removeTheme,
       addHashtag,
       removeHashtag,
-      resetForm
+      resetForm,
+      handleHashtagKeydown,
+      handleHashtagInput,
+      handleThemeKeydown,
+      handleThemeInput
     }
   }
 }
