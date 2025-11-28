@@ -41,22 +41,22 @@ class LinkedInOAuthService
         // LinkedIn scopes - comprehensive permissions for full platform functionality
         $this->scopes = [
             // Basic profile and authentication
-            'r_basicprofile',                    // Use your basic profile including your name, photo, headline, and public profile URL
+            'r_basicprofile',                    // Access basic profile information including name, photo, headline, and public profile URL
             
             // Member permissions
-            'w_member_social',                   // Create, modify, and delete posts, comments, and reactions on your behalf
-            'w_member_social_feed',              // Create, modify, and delete comments and reactions on posts on your behalf
-            'r_member_profile',                  // Retrieve your profile analytics, including number of profile viewers, followers, and search appearances
-            'r_member_post',                     // Retrieve your posts and their reporting data
-            'r_1st_connections_size',            // Retrieve the number of 1st-degree connections within your network
+            'r_member_postAnalytics',            // Access analytics data for member posts and content performance
+            'r_organization_followers',          // Access follower count and demographics for organizations you manage
+            'r_organization_social',             // Read organization's social content, posts, and engagement data
+            'rw_organization_admin',             // Full administrative access to manage organization pages and settings
+            'r_organization_social_feed',        // Read organization's social feed content and interactions
             
             // Organization permissions
-            'rw_organization_admin',             // Manage your organization's pages and retrieve reporting data
-            'w_organization_social',             // Create, modify, and delete posts, comments, and reactions on your organization's behalf
-            'w_organization_social_feed',        // Create, modify, and delete comments and reactions on your organization's posts
-            'r_organization_social',             // Retrieve your organization's posts, comments, reactions, and other engagement data
-            'r_organization_social_feed',        // Retrieve comments, reactions, and other engagement data on your organization's posts
-            'r_organization_followers',          // Use your followers' data so your organization can mention them in posts
+            'w_member_social',                   // Create and manage social content on behalf of the member
+            'r_member_profileAnalytics',         // Access member profile analytics including views and search appearances
+            'w_organization_social',             // Create and manage social content for organizations you administer
+            'w_organization_social_feed',        // Manage organization's social feed content and interactions
+            'w_member_social_feed',              // Create and manage member's social feed content
+            'r_1st_connections_size'             // Access the count of first-degree connections in your network
         ];
     }
 
