@@ -24,7 +24,7 @@
       <div class="mt-4">
         <button
           type="button"
-          @click="$refs.fileInput.click()"
+          @click="fileInput.click()"
           class="text-blue-600 hover:text-blue-500 font-medium"
         >
           Upload images
@@ -83,9 +83,9 @@
             <div
               v-for="platform in platforms"
               :key="platform"
-              :class="media.hasPlatformCrop && media.hasPlatformCrop(platform) ? 'bg-green-500' : 'bg-gray-400'"
+              :class="hasPlatformCrop(media, platform) ? 'bg-green-500' : 'bg-gray-400'"
               class="w-2 h-2 rounded-full"
-              :title="`${platform} crop ${media.hasPlatformCrop && media.hasPlatformCrop(platform) ? 'available' : 'not available'}`"
+              :title="`${platform} crop ${hasPlatformCrop(media, platform) ? 'available' : 'not available'}`"
             ></div>
           </div>
         </div>
@@ -115,6 +115,7 @@ export default {
     const isDragging = ref(false)
     const uploading = ref(false)
     const uploadedMedia = ref([])
+    const fileInput = ref(null)
 
     const handleDrop = (e) => {
       e.preventDefault()
@@ -173,8 +174,8 @@ export default {
         emit('media-uploaded', newMedia)
 
         // Clear file input
-        if (this.$refs.fileInput) {
-          this.$refs.fileInput.value = ''
+        if (fileInput.value) {
+          fileInput.value.value = ''
         }
 
       } catch (error) {
@@ -201,6 +202,23 @@ export default {
       }
     }
 
+    const hasPlatformCrop = (media, platform) => {
+      if (!media.platform_crops) return false
+      
+      let crops
+      if (typeof media.platform_crops === 'string') {
+        try {
+          crops = JSON.parse(media.platform_crops)
+        } catch (e) {
+          return false
+        }
+      } else {
+        crops = media.platform_crops
+      }
+      
+      return crops && crops[platform]
+    }
+
     const loadUploadedMedia = async () => {
       try {
         const response = await axios.get('/api/media')
@@ -218,10 +236,12 @@ export default {
       isDragging,
       uploading,
       uploadedMedia,
+      fileInput,
       handleDrop,
       handleFileSelect,
       selectMedia,
-      deleteMedia
+      deleteMedia,
+      hasPlatformCrop
     }
   }
 }
