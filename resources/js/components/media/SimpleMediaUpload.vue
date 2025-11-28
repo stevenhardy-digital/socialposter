@@ -53,26 +53,28 @@
           :key="media.id"
           class="relative group aspect-square"
         >
-          <div class="w-full h-full bg-gray-100 rounded border overflow-hidden">
-            <img
-              :src="getImageUrl(media)"
-              :alt="media.filename"
-              class="w-full h-full object-cover cursor-pointer transition-opacity duration-200"
-              @click="selectMedia(media)"
-              @error="handleImageError($event, media)"
-              @load="handleImageLoad"
-              loading="lazy"
-            />
-            
-            <!-- Loading placeholder -->
-            <div 
-              v-if="!media.imageLoaded" 
-              class="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center"
-            >
+          <div class="w-full h-full bg-gray-100 rounded border overflow-hidden relative">
+            <!-- Loading placeholder (behind image) -->
+            <div class="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center">
               <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
               </svg>
             </div>
+            
+            <!-- Image (on top of placeholder) -->
+            <img
+              :src="getImageUrl(media)"
+              :alt="media.filename"
+              class="relative w-full h-full object-cover cursor-pointer transition-opacity duration-200 z-10"
+              :class="{ 
+                'opacity-0': media.imageError,
+                'loaded': media.imageLoaded
+              }"
+              @click="selectMedia(media)"
+              @error="handleImageError($event, media)"
+              @load="handleImageLoad($event, media)"
+              loading="lazy"
+            />
           </div>
           
           
@@ -185,6 +187,13 @@ export default {
         })
 
         const newMedia = response.data.media
+        
+        // Initialize loading states for new media
+        newMedia.forEach(item => {
+          item.imageLoaded = false
+          item.imageError = false
+        })
+        
         uploadedMedia.value.push(...newMedia)
         
         emit('media-uploaded', newMedia)
@@ -238,28 +247,43 @@ export default {
     const getImageUrl = (media) => {
       // Try thumbnail first, then original, with cache busting
       const timestamp = new Date(media.updated_at).getTime()
+      let url = null
+      
       if (media.thumbnail_url) {
-        return `${media.thumbnail_url}?t=${timestamp}`
+        url = `${media.thumbnail_url}?t=${timestamp}`
+      } else if (media.original_url) {
+        url = `${media.original_url}?t=${timestamp}`
       }
-      if (media.original_url) {
-        return `${media.original_url}?t=${timestamp}`
-      }
-      return null
+      
+      // Debug logging
+      console.log('Getting image URL for media:', {
+        id: media.id,
+        filename: media.filename,
+        thumbnail_url: media.thumbnail_url,
+        original_url: media.original_url,
+        final_url: url
+      })
+      
+      return url
     }
 
     const handleImageError = (event, media) => {
       console.error('Image failed to load:', event.target.src, media)
       
+      // Mark as error to hide the image
+      media.imageError = true
+      
       // Try fallback to original URL if thumbnail failed
       if (event.target.src.includes('thumbnails') && media.original_url) {
+        media.imageError = false
         event.target.src = media.original_url
-      } else {
-        // Hide the image and show placeholder
-        event.target.style.opacity = '0'
       }
     }
 
-    const handleImageLoad = (event) => {
+    const handleImageLoad = (event, media) => {
+      // Mark as loaded and show the image
+      media.imageLoaded = true
+      media.imageError = false
       event.target.style.opacity = '1'
     }
 
@@ -267,6 +291,12 @@ export default {
       try {
         const response = await axios.get('/api/media')
         const media = response.data.media || []
+        
+        // Initialize loading states for each media item
+        media.forEach(item => {
+          item.imageLoaded = false
+          item.imageError = false
+        })
         
         // Debug: Log the media data
         console.log('Loaded media:', media)
@@ -319,5 +349,24 @@ export default {
     right: 0;
     bottom: 0;
   }
+}
+
+/* Ensure proper layering */
+.relative {
+  position: relative;
+}
+
+.z-10 {
+  z-index: 10;
+}
+
+/* Image loading states */
+img[loading="lazy"] {
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+img[loading="lazy"].loaded {
+  opacity: 1;
 }
 </style>
