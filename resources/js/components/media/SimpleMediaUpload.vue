@@ -930,7 +930,7 @@ export default {
 
     const getCropContainerStyle = (platform) => {
       const ratio = getPlatformRatio(platform)
-      const maxWidth = 280 // Maximum width for the container
+      const maxWidth = 782 // Maximum width for the container
       
       let width, height
       
@@ -940,7 +940,7 @@ export default {
         height = maxWidth / ratio
       } else {
         // Portrait - height is constrained to prevent too tall images
-        const maxHeight = 200
+        const maxHeight = 410
         height = maxHeight
         width = maxHeight * ratio
       }
