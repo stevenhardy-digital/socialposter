@@ -6,6 +6,7 @@ use App\Models\Media;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Intervention\Image\ImageManager;
 use Intervention\Image\Drivers\Gd\Driver;
@@ -124,7 +125,26 @@ class MediaController extends Controller
         // Handle both file uploads and existing file paths
         if (is_string($file)) {
             // File path - read from storage
-            $image = $manager->read(Storage::disk('public')->path($file));
+            $fullPath = Storage::disk('public')->path($file);
+            
+            // If the file doesn't exist, try alternative paths
+            if (!file_exists($fullPath)) {
+                // Try without the storage path prefix
+                $alternativePath = storage_path('app/public/' . $file);
+                if (file_exists($alternativePath)) {
+                    $fullPath = $alternativePath;
+                } else {
+                    // Try with public_path
+                    $publicPath = public_path('storage/' . $file);
+                    if (file_exists($publicPath)) {
+                        $fullPath = $publicPath;
+                    } else {
+                        throw new \Exception("Image file not found. Tried paths: {$fullPath}, {$alternativePath}, {$publicPath}");
+                    }
+                }
+            }
+            
+            $image = $manager->read($fullPath);
         } else {
             // File upload
             $image = $manager->read($file);
@@ -147,8 +167,27 @@ class MediaController extends Controller
 
             $crop = $crops[$platform];
             
-            // Create cropped image
-            $croppedImage = $manager->read($file);
+            // Create cropped image from the same source
+            if (is_string($file)) {
+                $fullPath = Storage::disk('public')->path($file);
+                
+                // Use the same path resolution logic as above
+                if (!file_exists($fullPath)) {
+                    $alternativePath = storage_path('app/public/' . $file);
+                    if (file_exists($alternativePath)) {
+                        $fullPath = $alternativePath;
+                    } else {
+                        $publicPath = public_path('storage/' . $file);
+                        if (file_exists($publicPath)) {
+                            $fullPath = $publicPath;
+                        }
+                    }
+                }
+                
+                $croppedImage = $manager->read($fullPath);
+            } else {
+                $croppedImage = $manager->read($file);
+            }
             $croppedImage->crop(
                 (int) $crop['width'],
                 (int) $crop['height'],
@@ -300,13 +339,28 @@ class MediaController extends Controller
             'crops' => $request->crops
         ];
 
-        // Re-process crops with new settings
-        $this->processImageCrops($media, $media->original_path, $cropData);
+        try {
+            // Re-process crops with new settings
+            $this->processImageCrops($media, $media->original_path, $cropData);
 
-        return response()->json([
-            'message' => 'Crops updated successfully',
-            'media' => $media->fresh()
-        ]);
+            return response()->json([
+                'message' => 'Crops updated successfully',
+                'media' => $media->fresh()
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to update crops', [
+                'media_id' => $media->id,
+                'original_path' => $media->original_path,
+                'full_path' => Storage::disk('public')->path($media->original_path),
+                'file_exists' => file_exists(Storage::disk('public')->path($media->original_path)),
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to update crops',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**

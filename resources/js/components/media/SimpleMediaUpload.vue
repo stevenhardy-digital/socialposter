@@ -184,28 +184,46 @@
           <!-- Platform Crops -->
           <div v-if="getPlatformCrops(selectedMediaForPreview).length > 0">
             <h4 class="text-md font-medium text-gray-900 mb-3">Platform-Specific Crops</h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div
                 v-for="crop in getPlatformCrops(selectedMediaForPreview)"
                 :key="crop.platform"
                 class="bg-gray-50 rounded-lg p-4"
               >
                 <h5 class="font-medium text-gray-800 mb-2 capitalize">{{ crop.platform }}</h5>
-                <div class="mb-2">
+                
+                <!-- Image container with correct aspect ratio -->
+                <div 
+                  class="mb-3 bg-white rounded border platform-crop-container relative" 
+                  :style="getCropContainerStyle(crop.platform)"
+                >
+                  <!-- Loading placeholder -->
+                  <div class="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center">
+                    <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                  </div>
+                  
+                  <!-- Image -->
                   <img
-                    :src="crop.url"
+                    :src="getCropImageUrl(crop)"
                     :alt="`${selectedMediaForPreview?.filename} - ${crop.platform}`"
-                    class="w-full h-32 object-cover rounded border"
+                    class="relative w-full h-full object-cover z-10 transition-opacity duration-200"
+                    @error="handleCropImageError($event, crop)"
+                    @load="handleCropImageLoad($event, crop)"
+                    loading="lazy"
                   />
                 </div>
-                <div class="text-xs text-gray-600 space-y-1">
+                
+                <div class="text-xs text-gray-600 space-y-1 mb-3">
                   <div>Size: {{ crop.width }}×{{ crop.height }}</div>
                   <div>Aspect: {{ getPlatformAspectRatio(crop.platform) }}</div>
                 </div>
-                <div class="mt-2 flex space-x-2">
+                
+                <div class="flex space-x-2">
                   <button
                     @click="openCropEditor(selectedMediaForPreview, crop.platform)"
-                    class="inline-flex items-center px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                    class="flex-1 inline-flex items-center justify-center px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
                   >
                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
@@ -215,7 +233,7 @@
                   <a
                     :href="crop.url"
                     target="_blank"
-                    class="inline-flex items-center px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                    class="flex-1 inline-flex items-center justify-center px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
                   >
                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
@@ -626,14 +644,15 @@ export default {
         url = `${media.original_url}?t=${timestamp}`
       }
       
-      // Debug logging
-      console.log('Getting image URL for media:', {
-        id: media.id,
-        filename: media.filename,
-        thumbnail_url: media.thumbnail_url,
-        original_url: media.original_url,
-        final_url: url
-      })
+      // Debug logging - only log if there's an issue
+      if (!url) {
+        console.error('No URL available for media:', {
+          id: media.id,
+          filename: media.filename,
+          thumbnail_url: media.thumbnail_url,
+          original_url: media.original_url
+        })
+      }
       
       return url
     }
@@ -656,6 +675,38 @@ export default {
       media.imageLoaded = true
       media.imageError = false
       event.target.style.opacity = '1'
+    }
+
+    const getCropImageUrl = (crop) => {
+      // Add cache busting and debug logging for crop images
+      const timestamp = Date.now()
+      const url = `${crop.url}?t=${timestamp}`
+      
+      console.log('Getting crop image URL:', {
+        platform: crop.platform,
+        original_url: crop.url,
+        final_url: url
+      })
+      
+      return url
+    }
+
+    const handleCropImageError = (event, crop) => {
+      console.error('Crop image failed to load:', event.target.src, crop)
+      
+      // Try fallback to original URL without cache busting
+      if (event.target.src.includes('?t=')) {
+        event.target.src = crop.url
+      } else {
+        // Hide the image and show placeholder
+        event.target.style.opacity = '0'
+      }
+    }
+
+    const handleCropImageLoad = (event, crop) => {
+      // Show the image when loaded
+      event.target.style.opacity = '1'
+      console.log('Crop image loaded successfully:', crop.platform, event.target.src)
     }
 
     const openPreviewModal = (media) => {
@@ -875,6 +926,30 @@ export default {
       }
       
       updatePreview()
+    }
+
+    const getCropContainerStyle = (platform) => {
+      const ratio = getPlatformRatio(platform)
+      const maxWidth = 280 // Maximum width for the container
+      
+      let width, height
+      
+      if (ratio >= 1) {
+        // Landscape or square - width is constrained
+        width = maxWidth
+        height = maxWidth / ratio
+      } else {
+        // Portrait - height is constrained to prevent too tall images
+        const maxHeight = 200
+        height = maxHeight
+        width = maxHeight * ratio
+      }
+      
+      return {
+        width: `${width}px`,
+        height: `${height}px`,
+        aspectRatio: ratio.toString()
+      }
     }
 
     const getPreviewSize = () => {
@@ -1131,10 +1206,14 @@ export default {
       updateCropArea,
       updatePreview,
       setCropPreset,
+      getCropContainerStyle,
       getPreviewSize,
       saveCrop,
       startDrag,
-      startResize
+      startResize,
+      getCropImageUrl,
+      handleCropImageError,
+      handleCropImageLoad
     }
   }
 }
@@ -1186,7 +1265,12 @@ img[loading="lazy"] {
 }
 
 img[loading="lazy"].loaded {
-  opacity: 1;
+  opacity: 1 !important;
+}
+
+/* Force opacity for loaded images */
+img[style*="opacity: 1"] {
+  opacity: 1 !important;
 }
 
 /* Hover effects */
@@ -1202,5 +1286,24 @@ img[loading="lazy"].loaded {
 button {
   position: relative;
   z-index: inherit;
+}
+
+/* Platform crop containers */
+.platform-crop-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.platform-crop-container img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.platform-crop-container img[style*="opacity: 1"] {
+  opacity: 1 !important;
 }
 </style>
