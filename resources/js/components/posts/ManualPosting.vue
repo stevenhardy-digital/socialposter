@@ -28,7 +28,7 @@
                     :key="account.id"
                     :value="account.id"
                   >
-                    {{ (account.platform || '').charAt(0).toUpperCase() + (account.platform || '').slice(1) }} - {{ account.account_name || 'Unknown Account' }}
+                    {{ (account.platform || '').charAt(0).toUpperCase() + (account.platform || '').slice(1) }} - {{ account.account_name || 'Unknown Account' }}{{ account.account_type === 'company' ? ' (Company)' : '' }}
                   </option>
                 </select>
               </div>

@@ -29,7 +29,15 @@
                 </div>
                 <div>
                   <p class="text-sm font-medium text-gray-900">{{ account.account_name }}</p>
-                  <p class="text-sm text-gray-500">{{ (account.platform || '').charAt(0).toUpperCase() + (account.platform || '').slice(1) }}</p>
+                  <p class="text-sm text-gray-500">
+                    {{ (account.platform || '').charAt(0).toUpperCase() + (account.platform || '').slice(1) }}
+                    <span v-if="account.account_type === 'company'" class="ml-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
+                      Company
+                    </span>
+                    <span v-else-if="account.account_type === 'personal'" class="ml-1 px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full">
+                      Personal
+                    </span>
+                  </p>
                 </div>
               </div>
               <div class="flex items-center space-x-2">

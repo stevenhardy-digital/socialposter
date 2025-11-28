@@ -20,6 +20,7 @@ class SocialAccount extends Model
         'refresh_token',
         'expires_at',
         'account_name',
+        'account_type',
     ];
 
     protected $casts = [

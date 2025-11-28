@@ -51,14 +51,30 @@
         <div
           v-for="media in uploadedMedia"
           :key="media.id"
-          class="relative group"
+          class="relative group aspect-square"
         >
-          <img
-            :src="media.thumbnail_url"
-            :alt="media.filename"
-            class="w-full h-24 object-cover rounded border cursor-pointer"
-            @click="selectMedia(media)"
-          />
+          <div class="w-full h-full bg-gray-100 rounded border overflow-hidden">
+            <img
+              :src="getImageUrl(media)"
+              :alt="media.filename"
+              class="w-full h-full object-cover cursor-pointer transition-opacity duration-200"
+              @click="selectMedia(media)"
+              @error="handleImageError($event, media)"
+              @load="handleImageLoad"
+              loading="lazy"
+            />
+            
+            <!-- Loading placeholder -->
+            <div 
+              v-if="!media.imageLoaded" 
+              class="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center"
+            >
+              <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+              </svg>
+            </div>
+          </div>
+          
           
           <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity rounded flex items-center justify-center">
             <button
@@ -219,10 +235,43 @@ export default {
       return crops && crops[platform]
     }
 
+    const getImageUrl = (media) => {
+      // Try thumbnail first, then original, with cache busting
+      const timestamp = new Date(media.updated_at).getTime()
+      if (media.thumbnail_url) {
+        return `${media.thumbnail_url}?t=${timestamp}`
+      }
+      if (media.original_url) {
+        return `${media.original_url}?t=${timestamp}`
+      }
+      return null
+    }
+
+    const handleImageError = (event, media) => {
+      console.error('Image failed to load:', event.target.src, media)
+      
+      // Try fallback to original URL if thumbnail failed
+      if (event.target.src.includes('thumbnails') && media.original_url) {
+        event.target.src = media.original_url
+      } else {
+        // Hide the image and show placeholder
+        event.target.style.opacity = '0'
+      }
+    }
+
+    const handleImageLoad = (event) => {
+      event.target.style.opacity = '1'
+    }
+
     const loadUploadedMedia = async () => {
       try {
         const response = await axios.get('/api/media')
-        uploadedMedia.value = response.data.media || []
+        const media = response.data.media || []
+        
+        // Debug: Log the media data
+        console.log('Loaded media:', media)
+        
+        uploadedMedia.value = media
       } catch (error) {
         console.error('Failed to load media:', error)
       }
@@ -241,8 +290,34 @@ export default {
       handleFileSelect,
       selectMedia,
       deleteMedia,
-      hasPlatformCrop
+      hasPlatformCrop,
+      getImageUrl,
+      handleImageError,
+      handleImageLoad
     }
   }
 }
 </script>
+
+<style scoped>
+.aspect-square {
+  aspect-ratio: 1 / 1;
+}
+
+/* Fallback for browsers that don't support aspect-ratio */
+@supports not (aspect-ratio: 1 / 1) {
+  .aspect-square::before {
+    content: '';
+    display: block;
+    padding-top: 100%;
+  }
+  
+  .aspect-square > div {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+}
+</style>

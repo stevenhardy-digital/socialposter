@@ -198,6 +198,7 @@ class SocialAccountController extends Controller
                 $authToken = $userData['state_data']['auth_token'];
             }
             
+            // Create the main personal account
             $socialAccount = SocialAccount::updateOrCreate(
                 [
                     'user_id' => $user->id,
@@ -208,9 +209,40 @@ class SocialAccountController extends Controller
                     'access_token' => $userData['access_token'],
                     'refresh_token' => $userData['refresh_token'],
                     'expires_at' => $userData['expires_in'] ? now()->addSeconds($userData['expires_in']) : null,
-                    'account_name' => $userData['name']
+                    'account_name' => $userData['name'],
+                    'account_type' => 'personal'
                 ]
             );
+
+            // For LinkedIn, also create accounts for company pages
+            if ($platform === 'linkedin' && isset($userData['company_pages']) && is_array($userData['company_pages'])) {
+                foreach ($userData['company_pages'] as $companyPage) {
+                    $companyId = $companyPage['id'] ?? null;
+                    $companyName = $companyPage['name']['localized']['en_US'] ?? 'Unknown Company';
+                    
+                    if ($companyId) {
+                        SocialAccount::updateOrCreate(
+                            [
+                                'user_id' => $user->id,
+                                'platform' => $platform,
+                                'platform_user_id' => $companyId
+                            ],
+                            [
+                                'access_token' => $userData['access_token'],
+                                'refresh_token' => $userData['refresh_token'],
+                                'expires_at' => $userData['expires_in'] ? now()->addSeconds($userData['expires_in']) : null,
+                                'account_name' => $companyName,
+                                'account_type' => 'company'
+                            ]
+                        );
+                    }
+                }
+                
+                Log::info('LinkedIn company pages processed', [
+                    'user_id' => $user->id,
+                    'company_pages_count' => count($userData['company_pages'])
+                ]);
+            }
 
             // Clean up session data but keep auth token for frontend
             $redirectAuthToken = session('oauth_auth_token');
