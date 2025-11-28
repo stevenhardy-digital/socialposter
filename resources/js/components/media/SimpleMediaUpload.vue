@@ -202,7 +202,16 @@
                   <div>Size: {{ crop.width }}×{{ crop.height }}</div>
                   <div>Aspect: {{ getPlatformAspectRatio(crop.platform) }}</div>
                 </div>
-                <div class="mt-2">
+                <div class="mt-2 flex space-x-2">
+                  <button
+                    @click="openCropEditor(selectedMediaForPreview, crop.platform)"
+                    class="inline-flex items-center px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                  >
+                    <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                    Edit Crop
+                  </button>
                   <a
                     :href="crop.url"
                     target="_blank"
@@ -260,11 +269,190 @@
         </div>
       </div>
     </div>
+
+    <!-- Crop Editor Modal -->
+    <div v-if="showCropModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" @click="closeCropModal">
+      <div class="relative top-10 mx-auto p-5 border w-11/12 md:w-4/5 lg:w-3/4 xl:w-2/3 shadow-lg rounded-md bg-white" @click.stop>
+        <div class="mt-3">
+          <!-- Modal Header -->
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-medium text-gray-900">
+              Crop Editor - {{ cropData.platform }} ({{ getPlatformAspectRatio(cropData.platform) }})
+            </h3>
+            <button @click="closeCropModal" class="text-gray-400 hover:text-gray-600">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Crop Interface -->
+          <div class="mb-6">
+            <div class="bg-gray-100 p-4 rounded-lg">
+              <div class="relative inline-block" ref="cropContainer">
+                <img
+                  ref="cropImage"
+                  :src="cropData.media?.original_url"
+                  :alt="cropData.media?.filename"
+                  class="max-w-full h-auto"
+                  style="max-height: 500px;"
+                  @load="initializeCropArea"
+                />
+                
+                <!-- Crop Overlay -->
+                <div
+                  v-if="cropArea.initialized"
+                  class="absolute border-2 border-blue-500 bg-blue-500 bg-opacity-20 cursor-move"
+                  :style="{
+                    left: cropArea.x + 'px',
+                    top: cropArea.y + 'px',
+                    width: cropArea.width + 'px',
+                    height: cropArea.height + 'px'
+                  }"
+                  @mousedown="startDrag"
+                >
+                  <!-- Resize handles -->
+                  <div class="absolute -top-1 -left-1 w-3 h-3 bg-blue-500 cursor-nw-resize" @mousedown.stop="startResize('nw')"></div>
+                  <div class="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 cursor-ne-resize" @mousedown.stop="startResize('ne')"></div>
+                  <div class="absolute -bottom-1 -left-1 w-3 h-3 bg-blue-500 cursor-sw-resize" @mousedown.stop="startResize('sw')"></div>
+                  <div class="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-500 cursor-se-resize" @mousedown.stop="startResize('se')"></div>
+                  
+                  <!-- Edge handles -->
+                  <div class="absolute -top-1 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-blue-500 cursor-n-resize" @mousedown.stop="startResize('n')"></div>
+                  <div class="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-blue-500 cursor-s-resize" @mousedown.stop="startResize('s')"></div>
+                  <div class="absolute -left-1 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-blue-500 cursor-w-resize" @mousedown.stop="startResize('w')"></div>
+                  <div class="absolute -right-1 top-1/2 transform -translate-y-1/2 w-3 h-3 bg-blue-500 cursor-e-resize" @mousedown.stop="startResize('e')"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Crop Controls -->
+            <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700">X Position</label>
+                <input
+                  v-model.number="cropArea.x"
+                  type="range"
+                  :min="0"
+                  :max="maxCropX"
+                  @input="updateCropArea"
+                  class="w-full"
+                />
+                <span class="text-xs text-gray-500">{{ cropArea.x }}px</span>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700">Y Position</label>
+                <input
+                  v-model.number="cropArea.y"
+                  type="range"
+                  :min="0"
+                  :max="maxCropY"
+                  @input="updateCropArea"
+                  class="w-full"
+                />
+                <span class="text-xs text-gray-500">{{ cropArea.y }}px</span>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700">Width</label>
+                <input
+                  v-model.number="cropArea.width"
+                  type="range"
+                  :min="minCropSize"
+                  :max="maxCropWidth"
+                  @input="updateCropArea"
+                  class="w-full"
+                />
+                <span class="text-xs text-gray-500">{{ cropArea.width }}px</span>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700">Height</label>
+                <span class="text-xs text-gray-500">{{ cropArea.height }}px (auto)</span>
+              </div>
+            </div>
+
+            <!-- Preset Buttons -->
+            <div class="mt-4 flex flex-wrap gap-2">
+              <button
+                @click="setCropPreset('center')"
+                class="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700"
+              >
+                Center Crop
+              </button>
+              <button
+                @click="setCropPreset('top')"
+                class="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700"
+              >
+                Top Focus
+              </button>
+              <button
+                @click="setCropPreset('bottom')"
+                class="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700"
+              >
+                Bottom Focus
+              </button>
+              <button
+                @click="setCropPreset('left')"
+                class="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700"
+              >
+                Left Focus
+              </button>
+              <button
+                @click="setCropPreset('right')"
+                class="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700"
+              >
+                Right Focus
+              </button>
+            </div>
+          </div>
+
+          <!-- Preview -->
+          <div class="mb-6">
+            <h4 class="text-md font-medium text-gray-900 mb-2">Preview</h4>
+            <div class="bg-gray-50 p-4 rounded-lg inline-block">
+              <canvas
+                ref="previewCanvas"
+                class="border rounded"
+                :style="{
+                  width: getPreviewSize().width + 'px',
+                  height: getPreviewSize().height + 'px'
+                }"
+              ></canvas>
+              <div class="mt-2 text-xs text-gray-600 text-center">
+                {{ getPreviewSize().width }}×{{ getPreviewSize().height }}px preview
+              </div>
+            </div>
+          </div>
+
+          <!-- Modal Actions -->
+          <div class="flex justify-between items-center pt-4 border-t border-gray-200">
+            <div class="text-sm text-gray-600">
+              Platform: {{ cropData.platform }} | Aspect Ratio: {{ getPlatformAspectRatio(cropData.platform) }}
+            </div>
+            
+            <div class="flex space-x-3">
+              <button
+                @click="closeCropModal"
+                class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                @click="saveCrop"
+                :disabled="savingCrop"
+                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              >
+                {{ savingCrop ? 'Saving...' : 'Save Crop' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 
 export default {
@@ -287,6 +475,36 @@ export default {
     const fileInput = ref(null)
     const showPreviewModal = ref(false)
     const selectedMediaForPreview = ref(null)
+    const showCropModal = ref(false)
+    const cropContainer = ref(null)
+    const cropImage = ref(null)
+    const previewCanvas = ref(null)
+    const savingCrop = ref(false)
+    
+    const cropData = ref({
+      media: null,
+      platform: null
+    })
+    
+    const cropArea = ref({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      initialized: false
+    })
+    
+    const dragState = ref({
+      isDragging: false,
+      isResizing: false,
+      resizeHandle: null,
+      startX: 0,
+      startY: 0,
+      startCropX: 0,
+      startCropY: 0,
+      startCropWidth: 0,
+      startCropHeight: 0
+    })
 
     const handleDrop = (e) => {
       e.preventDefault()
@@ -496,6 +714,362 @@ export default {
       })
     }
 
+    const openCropEditor = (media, platform) => {
+      cropData.value = { media, platform }
+      showCropModal.value = true
+      closePreviewModal()
+    }
+
+    const closeCropModal = () => {
+      showCropModal.value = false
+      cropData.value = { media: null, platform: null }
+      cropArea.value.initialized = false
+    }
+
+    const getPlatformRatio = (platform) => {
+      const ratios = {
+        instagram: 1.0,
+        facebook: 1.91,
+        linkedin: 1.91,
+        twitter: 1.91,
+        'instagram-story': 0.5625,
+        'facebook-story': 0.5625
+      }
+      return ratios[platform] || 1.0
+    }
+
+    const initializeCropArea = () => {
+      if (!cropImage.value || !cropData.value.platform) return
+      
+      const img = cropImage.value
+      const ratio = getPlatformRatio(cropData.value.platform)
+      
+      // Calculate initial crop area (center crop)
+      const imgWidth = img.offsetWidth
+      const imgHeight = img.offsetHeight
+      
+      let cropWidth, cropHeight
+      
+      if (imgWidth / imgHeight > ratio) {
+        // Image is wider than target ratio
+        cropHeight = imgHeight
+        cropWidth = cropHeight * ratio
+      } else {
+        // Image is taller than target ratio
+        cropWidth = imgWidth
+        cropHeight = cropWidth / ratio
+      }
+      
+      cropArea.value = {
+        x: (imgWidth - cropWidth) / 2,
+        y: (imgHeight - cropHeight) / 2,
+        width: cropWidth,
+        height: cropHeight,
+        initialized: true
+      }
+      
+      updatePreview()
+    }
+
+    const updateCropArea = () => {
+      const ratio = getPlatformRatio(cropData.value.platform)
+      cropArea.value.height = cropArea.value.width / ratio
+      
+      // Ensure crop area stays within bounds
+      const img = cropImage.value
+      if (!img) return
+      
+      const maxX = img.offsetWidth - cropArea.value.width
+      const maxY = img.offsetHeight - cropArea.value.height
+      
+      cropArea.value.x = Math.max(0, Math.min(cropArea.value.x, maxX))
+      cropArea.value.y = Math.max(0, Math.min(cropArea.value.y, maxY))
+      
+      updatePreview()
+    }
+
+    const updatePreview = () => {
+      if (!previewCanvas.value || !cropImage.value || !cropArea.value.initialized) return
+      
+      const canvas = previewCanvas.value
+      const ctx = canvas.getContext('2d')
+      const img = cropImage.value
+      
+      // Set canvas size to match crop area
+      canvas.width = cropArea.value.width
+      canvas.height = cropArea.value.height
+      
+      // Calculate scale factor between displayed image and actual image
+      const scaleX = cropData.value.media.width / img.offsetWidth
+      const scaleY = cropData.value.media.height / img.offsetHeight
+      
+      // Create a new image element for drawing
+      const drawImg = new Image()
+      drawImg.crossOrigin = 'anonymous'
+      drawImg.onload = () => {
+        ctx.drawImage(
+          drawImg,
+          cropArea.value.x * scaleX,
+          cropArea.value.y * scaleY,
+          cropArea.value.width * scaleX,
+          cropArea.value.height * scaleY,
+          0,
+          0,
+          cropArea.value.width,
+          cropArea.value.height
+        )
+      }
+      drawImg.src = cropData.value.media.original_url
+    }
+
+    const setCropPreset = (preset) => {
+      if (!cropImage.value) return
+      
+      const img = cropImage.value
+      const ratio = getPlatformRatio(cropData.value.platform)
+      
+      let cropWidth, cropHeight
+      
+      if (img.offsetWidth / img.offsetHeight > ratio) {
+        cropHeight = img.offsetHeight
+        cropWidth = cropHeight * ratio
+      } else {
+        cropWidth = img.offsetWidth
+        cropHeight = cropWidth / ratio
+      }
+      
+      let x, y
+      
+      switch (preset) {
+        case 'center':
+          x = (img.offsetWidth - cropWidth) / 2
+          y = (img.offsetHeight - cropHeight) / 2
+          break
+        case 'top':
+          x = (img.offsetWidth - cropWidth) / 2
+          y = 0
+          break
+        case 'bottom':
+          x = (img.offsetWidth - cropWidth) / 2
+          y = img.offsetHeight - cropHeight
+          break
+        case 'left':
+          x = 0
+          y = (img.offsetHeight - cropHeight) / 2
+          break
+        case 'right':
+          x = img.offsetWidth - cropWidth
+          y = (img.offsetHeight - cropHeight) / 2
+          break
+        default:
+          x = (img.offsetWidth - cropWidth) / 2
+          y = (img.offsetHeight - cropHeight) / 2
+      }
+      
+      cropArea.value = {
+        x,
+        y,
+        width: cropWidth,
+        height: cropHeight,
+        initialized: true
+      }
+      
+      updatePreview()
+    }
+
+    const getPreviewSize = () => {
+      const maxSize = 200
+      const ratio = getPlatformRatio(cropData.value.platform)
+      
+      if (ratio >= 1) {
+        return { width: maxSize, height: maxSize / ratio }
+      } else {
+        return { width: maxSize * ratio, height: maxSize }
+      }
+    }
+
+    const saveCrop = async () => {
+      if (!cropData.value.media || !cropArea.value.initialized) return
+      
+      savingCrop.value = true
+      
+      try {
+        // Calculate scale factor
+        const img = cropImage.value
+        const scaleX = cropData.value.media.width / img.offsetWidth
+        const scaleY = cropData.value.media.height / img.offsetHeight
+        
+        const cropParams = {
+          x: Math.round(cropArea.value.x * scaleX),
+          y: Math.round(cropArea.value.y * scaleY),
+          width: Math.round(cropArea.value.width * scaleX),
+          height: Math.round(cropArea.value.height * scaleY)
+        }
+        
+        await axios.put(`/api/media/${cropData.value.media.id}/crops`, {
+          platforms: [cropData.value.platform],
+          crops: {
+            [cropData.value.platform]: cropParams
+          }
+        })
+        
+        // Refresh the media data
+        await loadUploadedMedia()
+        
+        closeCropModal()
+        
+        // Reopen preview modal with updated data
+        const updatedMedia = uploadedMedia.value.find(m => m.id === cropData.value.media.id)
+        if (updatedMedia) {
+          openPreviewModal(updatedMedia)
+        }
+        
+      } catch (error) {
+        console.error('Failed to save crop:', error)
+        alert('Failed to save crop. Please try again.')
+      } finally {
+        savingCrop.value = false
+      }
+    }
+
+    // Computed properties for crop constraints
+    const maxCropX = computed(() => {
+      if (!cropImage.value || !cropArea.value.initialized) return 0
+      return cropImage.value.offsetWidth - cropArea.value.width
+    })
+
+    const maxCropY = computed(() => {
+      if (!cropImage.value || !cropArea.value.initialized) return 0
+      return cropImage.value.offsetHeight - cropArea.value.height
+    })
+
+    const maxCropWidth = computed(() => {
+      if (!cropImage.value) return 0
+      return cropImage.value.offsetWidth - cropArea.value.x
+    })
+
+    const minCropSize = computed(() => 50) // Minimum crop size
+
+    // Mouse event handlers for drag and resize
+    const startDrag = (event) => {
+      dragState.value = {
+        isDragging: true,
+        isResizing: false,
+        startX: event.clientX,
+        startY: event.clientY,
+        startCropX: cropArea.value.x,
+        startCropY: cropArea.value.y
+      }
+      
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      event.preventDefault()
+    }
+
+    const startResize = (handle) => {
+      return (event) => {
+        dragState.value = {
+          isDragging: false,
+          isResizing: true,
+          resizeHandle: handle,
+          startX: event.clientX,
+          startY: event.clientY,
+          startCropX: cropArea.value.x,
+          startCropY: cropArea.value.y,
+          startCropWidth: cropArea.value.width,
+          startCropHeight: cropArea.value.height
+        }
+        
+        document.addEventListener('mousemove', handleMouseMove)
+        document.addEventListener('mouseup', handleMouseUp)
+        event.preventDefault()
+      }
+    }
+
+    const handleMouseMove = (event) => {
+      if (!dragState.value.isDragging && !dragState.value.isResizing) return
+      
+      const deltaX = event.clientX - dragState.value.startX
+      const deltaY = event.clientY - dragState.value.startY
+      
+      if (dragState.value.isDragging) {
+        // Handle dragging
+        cropArea.value.x = Math.max(0, Math.min(
+          dragState.value.startCropX + deltaX,
+          maxCropX.value
+        ))
+        cropArea.value.y = Math.max(0, Math.min(
+          dragState.value.startCropY + deltaY,
+          maxCropY.value
+        ))
+      } else if (dragState.value.isResizing) {
+        // Handle resizing while maintaining aspect ratio
+        const ratio = getPlatformRatio(cropData.value.platform)
+        const handle = dragState.value.resizeHandle
+        
+        let newWidth = dragState.value.startCropWidth
+        let newHeight = dragState.value.startCropHeight
+        let newX = dragState.value.startCropX
+        let newY = dragState.value.startCropY
+        
+        if (handle.includes('e')) {
+          newWidth = dragState.value.startCropWidth + deltaX
+        }
+        if (handle.includes('w')) {
+          newWidth = dragState.value.startCropWidth - deltaX
+          newX = dragState.value.startCropX + deltaX
+        }
+        if (handle.includes('s')) {
+          newHeight = dragState.value.startCropHeight + deltaY
+        }
+        if (handle.includes('n')) {
+          newHeight = dragState.value.startCropHeight - deltaY
+          newY = dragState.value.startCropY + deltaY
+        }
+        
+        // Maintain aspect ratio
+        if (handle.includes('e') || handle.includes('w')) {
+          newHeight = newWidth / ratio
+        } else if (handle.includes('n') || handle.includes('s')) {
+          newWidth = newHeight * ratio
+        }
+        
+        // Apply constraints
+        const img = cropImage.value
+        if (img) {
+          newWidth = Math.max(minCropSize.value, Math.min(newWidth, img.offsetWidth - newX))
+          newHeight = newWidth / ratio
+          
+          if (newX + newWidth > img.offsetWidth) {
+            newWidth = img.offsetWidth - newX
+            newHeight = newWidth / ratio
+          }
+          if (newY + newHeight > img.offsetHeight) {
+            newHeight = img.offsetHeight - newY
+            newWidth = newHeight * ratio
+          }
+          
+          cropArea.value.x = Math.max(0, newX)
+          cropArea.value.y = Math.max(0, newY)
+          cropArea.value.width = newWidth
+          cropArea.value.height = newHeight
+        }
+      }
+      
+      updatePreview()
+    }
+
+    const handleMouseUp = () => {
+      dragState.value = {
+        isDragging: false,
+        isResizing: false,
+        resizeHandle: null
+      }
+      
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
     const loadUploadedMedia = async () => {
       try {
         const response = await axios.get('/api/media')
@@ -527,6 +1101,17 @@ export default {
       fileInput,
       showPreviewModal,
       selectedMediaForPreview,
+      showCropModal,
+      cropContainer,
+      cropImage,
+      previewCanvas,
+      savingCrop,
+      cropData,
+      cropArea,
+      maxCropX,
+      maxCropY,
+      maxCropWidth,
+      minCropSize,
       handleDrop,
       handleFileSelect,
       selectMedia,
@@ -539,7 +1124,17 @@ export default {
       closePreviewModal,
       getPlatformCrops,
       getPlatformAspectRatio,
-      formatDate
+      formatDate,
+      openCropEditor,
+      closeCropModal,
+      initializeCropArea,
+      updateCropArea,
+      updatePreview,
+      setCropPreset,
+      getPreviewSize,
+      saveCrop,
+      startDrag,
+      startResize
     }
   }
 }
